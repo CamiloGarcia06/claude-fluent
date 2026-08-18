@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>claude-fluent</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <span class="brand">claude-fluent</span>
+  <nav>
+    <a href="#">Mazos</a>
+    <a href="#">Ajustes</a>
+  </nav>
+</header>
+
+<p id="offline" class="offline" hidden></p>
+
+<main id="today" hidden>
+
+  <section class="hero">
+    <p id="date" class="date"></p>
+    <h1 id="due-headline"></h1>
+    <button id="start" type="button">Empezar</button>
+    <button id="add-cards" type="button" hidden>Agregar tarjetas</button>
+    <p id="start-hint" class="hint" hidden></p>
+    <div class="hero-foot">
+      <span id="streak" class="streak"></span>
+      <span id="grace" class="grace"></span>
+    </div>
+  </section>
+
+  <section class="panel repair" id="repair" hidden>
+    <div class="panel-head">
+      <h2 id="repair-title">Reparar tarjeta</h2>
+      <span id="repair-status" class="sub"></span>
+    </div>
+    <p id="repair-diagnosis" class="diagnosis"></p>
+    <div id="repair-diff" class="diff"></div>
+    <p id="repair-rationale" class="rationale"></p>
+    <div class="actions">
+      <button id="repair-accept" type="button">Aceptar</button>
+      <button id="repair-discard" type="button" class="ghost">Descartar</button>
+    </div>
+  </section>
+
+  <div class="columns">
+
+    <div class="col">
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Últimos 30 días</h2>
+        </div>
+        <p id="calendar-sub" class="sub"></p>
+        <div id="calendar" class="calendar"></div>
+      </section>
+
+      <section class="panel" id="struggling-panel">
+        <div class="panel-head">
+          <h2>Vengo fallando</h2>
+          <a id="struggling-all" href="#" hidden></a>
+        </div>
+        <ul id="struggling" class="rows"></ul>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Mis mazos</h2>
+          <a href="#">+ nuevo</a>
+        </div>
+        <ul id="decks" class="rows"></ul>
+      </section>
+    </div>
+
+  </div>
+</main>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,466 @@
+/* claude-fluent — Today screen.
+   Direction: "la ficha de cartón". Cool card stock, graphite, and the single
+   red margin rule of an index card. Depth is borders-only: paper does not
+   levitate. Red means the present — today's mark and the button that starts
+   it. Nothing else is ever red, least of all the cards you keep failing. */
+
+:root {
+  /* Paper and ink */
+  --paper:        #fbfbfa;
+  --paper-inset:  #f4f4f2;
+  --ink:          #1b1d20;   /* primary   — headlines, values      */
+  --ink-2:        #4a4e54;   /* secondary — body                   */
+  --ink-3:        #7c8188;   /* tertiary  — metadata, counts       */
+  --ink-4:        #a8adb4;   /* muted     — inactive, empty states */
+
+  /* The printed rules of the card */
+  --rule:         rgba(27, 29, 32, 0.13);
+  --rule-faint:   rgba(27, 29, 32, 0.07);
+  --rule-blue:    rgba(42, 85, 128, 0.30);
+
+  /* The one accent: the blue-black ink you write on the card with. It was
+     brick red, but red reads as danger in every interface anyone has used,
+     and "Empezar" is the most positive thing on this screen. Worse, the old
+     accent sat ten degrees of hue from --alarm, so the action colour and the
+     error colour were nearly the same. Red is now only ever a failure. */
+  --present:      #2a5580;
+  --present-ink:  #ffffff;
+  --present-dim:  rgba(42, 85, 128, 0.10);
+
+  /* Kraft of the divider tabs — the grace day, a token you spend */
+  --kraft:        #8a6f4a;
+  --kraft-dim:    rgba(138, 111, 74, 0.10);
+
+  /* A genuine failure of the system, not of the person */
+  --alarm:        #a8342a;
+  --alarm-dim:    #fdf3f2;
+
+  /* Spacing — base 4 */
+  --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
+  --s5: 24px; --s6: 32px; --s7: 48px;
+
+  --r-sm: 3px;   /* day cells        */
+  --r-md: 6px;   /* buttons, pills   */
+
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Cantarell,
+          "Noto Sans", sans-serif;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Mono", Menlo,
+          Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper:        #17181b;
+    --paper-inset:  #1e2024;
+    --ink:          #e9eaec;
+    --ink-2:        #b3b8bf;
+    --ink-3:        #858b93;
+    --ink-4:        #61666d;
+
+    --rule:         rgba(255, 255, 255, 0.13);
+    --rule-faint:   rgba(255, 255, 255, 0.07);
+    --rule-blue:    rgba(140, 168, 200, 0.20);
+
+    --present:      #7ba9d4;
+    --present-ink:  #17181b;
+    --present-dim:  rgba(123, 169, 212, 0.14);
+
+    --kraft:        #c2a074;
+    --kraft-dim:    rgba(194, 160, 116, 0.12);
+
+    --alarm:        #e8776c;
+    --alarm-dim:    #26191a;
+  }
+}
+
+* { box-sizing: border-box; }
+
+/* The page toggles four elements with the hidden attribute. Any display rule
+   below would outrank the UA stylesheet and strand them visible. */
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink-2);
+  font: 400 15px/1.55 var(--font);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--present); outline-offset: 2px; border-radius: 2px; }
+
+/* ── Top bar ──────────────────────────────────────────────────────────
+   Secondary by instruction: you did not come here to navigate. */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding: var(--s3) var(--s5);
+  border-bottom: 1px solid var(--rule-faint);
+}
+.brand {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-2);
+}
+.topbar nav { display: flex; gap: var(--s1); }
+.topbar nav a {
+  font-size: 13px;
+  color: var(--ink-3);
+  text-decoration: none;
+  padding: var(--s2) var(--s3);   /* hit area, not decoration */
+  border-radius: var(--r-md);
+}
+.topbar nav a:hover { color: var(--ink); background: var(--paper-inset); }
+
+main {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: var(--s7) var(--s5) var(--s7);
+}
+
+/* ── Anki is not answering. The only other place red is allowed. ────── */
+.offline {
+  margin: 0;
+  padding: var(--s3) var(--s5);
+  background: var(--alarm-dim);
+  border-bottom: 1px solid var(--alarm);
+  color: var(--alarm);
+  font-size: 14px;
+}
+
+/* ── Hero — the one focal point ───────────────────────────────────────
+   Open, see what today is, start. It wins on size and on the air around
+   it, and it carries no box: a border here would make it a peer of the
+   panels below, and it is not one. */
+.hero {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: var(--s5);
+  padding-bottom: var(--s6);
+  margin-bottom: var(--s6);
+  border-bottom: 1px solid var(--rule-faint);
+}
+
+.date {
+  grid-column: 1;
+  margin: 0 0 var(--s1);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+
+h1 {
+  grid-column: 1;
+  margin: 0;
+  font-size: 34px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.022em;   /* large type tightens */
+  color: var(--ink);
+  text-wrap: balance;
+}
+
+#start, #add-cards {
+  font: 600 16px/1 var(--font);
+  color: var(--present-ink);
+  background: var(--present);
+  border: 1px solid var(--present);
+  border-radius: var(--r-md);
+  padding: var(--s4) var(--s6);
+  min-height: 48px;
+  cursor: pointer;
+  transition: filter 140ms cubic-bezier(.23,1,.32,1),
+              transform 110ms cubic-bezier(.23,1,.32,1);
+}
+#start { grid-column: 2; grid-row: 1 / span 2; justify-self: end; }
+#start:hover:not(:disabled)  { filter: brightness(1.08); }
+#start:active:not(:disabled) { transform: scale(0.975); }
+#add-cards:hover  { filter: brightness(1.08); }
+#add-cards:active { transform: scale(0.975); }
+
+#add-cards {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  justify-self: end;
+}
+
+.hint {
+  grid-column: 1 / -1;
+  margin: var(--s4) 0 0;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.hero-foot {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  flex-wrap: wrap;
+  margin-top: var(--s5);
+}
+
+/* The chain of marks. Its number is the only figure that gets mono. */
+.streak {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  background: var(--paper-inset);
+  border: 1px solid var(--rule-faint);
+  border-radius: var(--r-md);
+  padding: var(--s2) var(--s3);
+  white-space: nowrap;
+}
+
+/* "faltar una vez no borra la racha" — the sentence that does the emotional
+   work of the whole screen. Muted would bury it; kraft gives it a voice. */
+.grace {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--kraft);
+  background: var(--kraft-dim);
+  border-radius: var(--r-md);
+  padding: var(--s2) var(--s3);
+  max-width: 48ch;
+}
+
+/* ── Columns ──────────────────────────────────────────────────────────── */
+.columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s7) var(--s7);
+  align-items: start;
+}
+.col { display: grid; gap: var(--s7); }
+@media (max-width: 880px) {
+  .columns { grid-template-columns: 1fr; gap: var(--s6); }
+  .col { gap: var(--s6); }
+  main { padding: var(--s5) var(--s4) var(--s6); }
+  .hero { grid-template-columns: 1fr; }
+  #start, #add-cards {
+    grid-row: auto; grid-column: 1; justify-self: stretch; margin-top: var(--s4);
+  }
+  h1 { font-size: 28px; }
+}
+
+/* Panels carry no border: the boxes-everywhere look makes every region a
+   peer and flattens the page. A heading and a hairline are enough. */
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--rule);
+}
+h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.006em;
+  color: var(--ink);
+}
+.panel-head a {
+  font-size: 12px;
+  color: var(--ink-3);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.panel-head a:hover { color: var(--ink); text-decoration: underline; }
+
+.sub {
+  margin: var(--s3) 0 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+
+/* ── The calendar — the signature ─────────────────────────────────────
+   A day you did not study is paper, not a hole: no fill, no border, only
+   the faintest printed rule. Absence never accuses. Ink marks presence.
+   Days before the first ever review are days the app did not exist for:
+   nothing but a hairline, so they never read as days you failed.
+   The last cell is always today, and takes the accent mark without the
+   markup having to say so. */
+.calendar {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: var(--s2);
+  margin-top: var(--s4);
+}
+.day {
+  aspect-ratio: 1;
+  border-radius: var(--r-sm);
+  background: var(--paper-inset);
+  box-shadow: inset 0 0 0 1px var(--rule-faint);
+}
+.day[data-studied="true"] {
+  background: var(--ink);
+  box-shadow: none;
+}
+.day[data-before="true"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--rule-faint);
+  opacity: 0.4;
+}
+.day:last-child {
+  position: relative;
+  box-shadow: inset 0 0 0 1px var(--rule-blue);
+}
+.day:last-child::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -6px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--present);
+}
+
+/* ── Repair — the model proposes, you approve ─────────────────────────
+   Before and after sit side by side and the unchanged fields stay quiet,
+   so the eye lands only on what would actually change. No red: a stuck
+   card is work in progress, not a verdict. */
+.repair {
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  padding: var(--s5);
+  margin-bottom: var(--s6);
+}
+.diagnosis {
+  margin: var(--s4) 0 0;
+  font-size: 15px;
+  color: var(--ink);
+  max-width: 68ch;
+  text-wrap: pretty;
+}
+.rationale {
+  margin: var(--s4) 0 0;
+  font-size: 13px;
+  color: var(--ink-3);
+  max-width: 68ch;
+}
+
+.diff { display: grid; gap: var(--s4); margin-top: var(--s5); }
+.field {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s3);
+}
+.field-name {
+  grid-column: 1 / -1;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+.field[data-changed="true"] .field-name { color: var(--ink-2); }
+@media (max-width: 640px) { .field { grid-template-columns: 1fr; } }
+
+.side {
+  border: 1px solid var(--rule-faint);
+  border-radius: var(--r-md);
+  padding: var(--s3);
+  background: var(--paper-inset);
+}
+.side[data-changed="false"] { opacity: 0.55; }
+.side-label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  margin-bottom: var(--s1);
+}
+.side-value { font-size: 15px; color: var(--ink); overflow-wrap: anywhere; }
+.side:last-child[data-changed="true"] { border-color: var(--rule-blue); }
+
+.actions { display: flex; gap: var(--s2); margin-top: var(--s5); }
+.actions button {
+  font: 600 14px/1 var(--font);
+  color: var(--present-ink);
+  background: var(--present);
+  border: 1px solid var(--present);
+  border-radius: var(--r-md);
+  padding: var(--s3) var(--s5);
+  min-height: 40px;
+  cursor: pointer;
+  transition: filter 140ms cubic-bezier(.23,1,.32,1),
+              transform 110ms cubic-bezier(.23,1,.32,1);
+}
+.actions button:hover:not(:disabled) { filter: brightness(1.08); }
+.actions button:active:not(:disabled) { transform: scale(0.975); }
+
+.ghost {
+  font: 500 13px/1 var(--font);
+  color: var(--ink-2);
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  padding: var(--s2) var(--s3);
+  cursor: pointer;
+}
+.ghost:hover:not(:disabled) { color: var(--ink); background: var(--paper-inset); }
+button:disabled { opacity: 0.45; cursor: default; }
+
+.repair-open { flex: none; align-self: center; }
+
+/* ── Deck and struggling rows ─────────────────────────────────────────
+   Hairlines between rows, not a border around each: a bordered list of
+   six items reads as a parking lot. */
+.rows {
+  list-style: none;
+  margin: var(--s2) 0 0;
+  padding: 0;
+}
+.rows li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+  padding: var(--s3) var(--s2);
+  border-bottom: 1px solid var(--rule-faint);
+}
+.rows li:last-child { border-bottom: 0; }
+
+.rows .name {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.rows .count {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.empty {
+  border-bottom: 0;
+  padding: var(--s4) var(--s2);
+  font-size: 13px;
+  color: var(--ink-4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
