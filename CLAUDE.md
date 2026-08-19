@@ -157,6 +157,15 @@ No framework, no build step, no npm. Save a file, reload the browser.
   heuristic caching and keep serving a stylesheet edited minutes ago. **That
   looks exactly like the change not having worked** — it cost a whole round of
   "you didn't do it" / "yes I did" before the header was added.
+- **Excalifont is vendored** at `static/fonts/`, SIL OFL 1.1, one 25 KB subset.
+  Same rule as anime.js: local-only app, no CDN. Declared with `font-display:
+  swap` and a `unicode-range`, and the system stack stays behind it in
+  `--font` — a glyph outside the subset degrades to the fallback instead of
+  showing tofu. Figures deliberately stay `--mono`: the animated streak
+  counter needs `tabular-nums`.
+- The hand-drawn look is **a skin, nothing more.** Same DOM, same buttons, same
+  keyboard, same focus, same resize. Outlines take `--r-rough` /
+  `--r-rough-alt` instead of `--r-md`; small squares keep `--r-sm`.
 - `app.js` is loaded as `type="module"`, which is what lets it import anime.js.
 - anime.js v4.5.0 is **vendored** at `static/anime.esm.js`, not a CDN link. The
   app is local-only, and a module whose import fails takes the whole file down

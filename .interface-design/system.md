@@ -29,8 +29,28 @@ Base: 4px
 Scale: 4, 8, 12, 16, 24, 32, 48 → `--s1` … `--s7`
 
 ### Radius
-`--r-sm` 3px (day cells) · `--r-md` 6px (buttons, pills, plates)
-Small elements get small radius. Nothing above 6px on this screen.
+`--r-sm` 3px (day cells, rail segments) · `--r-md` 6px (nav items)
+
+Anything with a drawn outline — buttons, pills, plates, the search field, the
+repair panel — takes one of the two **hand-drawn corners** instead:
+
+```
+--r-rough:     9px 20px 12px 16px / 16px 10px 18px 12px
+--r-rough-alt: 18px 9px 16px 12px / 11px 18px 12px 16px
+```
+
+Eight values, the two axes of each corner disagreeing slightly, so no corner
+matches another and the outline reads as drawn rather than constructed.
+**Alternate the two between neighbours** — the giveaway of the trick is every
+box wobbling identically.
+
+Deliberately modest. The widely copied version of this trick uses 255px/15px,
+which is charming on a small button and a lens on a 1080px panel. Excalidraw's
+own corners are restrained: what reads as hand-drawn there is the wobble of the
+stroke, not the size of the arc.
+
+The small squares keep `--r-sm`. A day cell or a rail segment given a 20px
+corner stops being a square and becomes a pill.
 
 ### Colors
 
@@ -57,12 +77,25 @@ never a state of the person. See the reversal in the decisions table.
 
 ### Typography
 
-Font: system stack (`ui-sans-serif, system-ui, …`) + `ui-monospace` for figures.
-No web font: the app is local-only and must work offline, and adding one would
-mean touching `index.html`.
+**Text is Excalifont**, the Excalidraw hand, SIL OFL 1.1, vendored at
+`static/fonts/` for the same reason anime.js is vendored: the app is local-only
+and must work offline. One 25 KB subset covers every character the interface
+renders; `font-display: swap` paints in the fallback first, and the system stack
+stays behind it in `--font` so a missing glyph degrades instead of showing tofu.
+
+**Figures stay `ui-monospace`.** This is now the strongest pairing in the
+system, not a leftover: printed monospaced numerals inside handwritten text is
+a form that was typeset and then filled in by hand, which is exactly what an
+index card is. It also keeps `tabular-nums` — the animated streak counter would
+jitter on a proportional hand font.
 
 Sizes in use: **11 · 12 · 13 · 15 · 16 · 34** (28 for h1 under 880px).
-Weights: **500, 600** only — 400 comes from the body default.
+Weights: **500, 600** — 400 comes from the body default. Excalifont ships one
+real weight, so 500 and 600 are synthesised. The hierarchy survives because it
+never rested on weight alone: colour, family and size carry it.
+
+**No negative tracking anywhere.** Large type used to tighten (`-0.022em` on
+h1); a hand does not tighten, it collides. All headings sit at `0`.
 
 This is not a ratio scale, deliberately. It is one hero size (34) and a tight
 utility band (11–16). Inside that band the separation comes from **weight,
@@ -198,6 +231,9 @@ easy case; these are the ones that decide whether it feels encouraging.
 
 | Decision | Rationale | Date |
 |---|---|---|
+| ~~System font stack, no web font~~ → **Excalifont, vendored** | Reversed, and the old row predicted it: it was logged as "the known weak point… revisit with an embedded `@font-face` if it ever matters." Both objections turned out to be answerable — vendoring the file keeps the app offline-only, and `index.html` did not have to change because the face is declared in the stylesheet. **The hand-drawn direction is a skin and nothing more:** same DOM, same buttons, same keyboard, same focus, same resize. Only the painting of text and outlines changed. | 2026-08-18 |
+| The hand is *handwriting*, not *whiteboard* | The distinction decides whether this looks right or looks like a mockup. A sketchy UI in the whiteboard sense says "provisional", which fights the whole premise of a daily ritual. But the accent was already defined as "the blue-black of writing ink", and a card written by hand is exactly that. The metaphor did not change; it got more literal. | 2026-08-18 |
+| No colour was borrowed along with the hand | Excalidraw's palette is many bright strokes. Taking it would undo the single-accent rule the whole system rests on. The look is the line and the letter, never the colour. | 2026-08-18 |
 | ~~No sidebar~~ → **left sidebar** | Reversed, because the premise changed rather than the taste. The sidebar was cut when navigation was two links and a column would have been furniture around an empty room. With Progreso, five skill libraries, Mazos, Atascos and Ajustes it is ten destinations, and ten links across one bar is a navigation product. Navigation only: no account, no plan, no brand mark beyond the wordmark. | 2026-08-18 |
 | The accent means two things: the primary action, and here-and-now | It was on `#start` and today's calendar mark. Adding the current rail segment and the current sidebar item does not spend a second accent — it says the same word in three places. The rule to hold is the *meaning*, not the count of usages: nothing else may take `--present`. | 2026-08-18 |
 | The active sidebar item is a 2px inset rule, not a fill | `--paper-inset` on `--paper` is two steps of lightness and reads as nothing. A rule of ink down the left edge is the index card's own margin rule, and it is the same mark today's cell carries under it. | 2026-08-18 |

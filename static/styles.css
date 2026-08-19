@@ -6,6 +6,30 @@
    never an action and never a state of the person: a day not studied is
    unmarked paper, and a stuck card gets no colour at all. */
 
+/* Excalifont, the Excalidraw hand. SIL OFL 1.1 — vendored at static/fonts/
+   rather than pulled from a CDN, for the same reason anime.js is: the app is
+   local-only and must work offline.
+
+   One subset file of the seven upstream ships: U+20–7e plus U+a0–ff, which
+   covers every character this interface renders — accents, ñ, ¿, the dashes
+   and the quotes. Anything outside it falls through to the system stack, so a
+   missing glyph degrades instead of showing tofu.
+
+   font-display: swap — text paints in the fallback immediately and reflows
+   when the font lands. The screen is never blank waiting for it, the same rule
+   the animation follows. */
+@font-face {
+  font-family: "Excalifont";
+  src: url("/fonts/Excalifont-Regular.woff2") format("woff2");
+  font-weight: 400 700;   /* one real weight; 500 and 600 are synthesised */
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+20-7e, U+a0-a3, U+a5-a6, U+a8-ab, U+ad-b1, U+b4, U+b6-b8,
+                 U+ba-ff, U+131, U+152-153, U+2bc, U+2c6, U+2da, U+2dc, U+304,
+                 U+308, U+2013-2014, U+2018-201a, U+201c-201e, U+2020, U+2022,
+                 U+2024-2026, U+2030, U+2039-203a, U+20ac, U+2122, U+2212;
+}
+
 :root {
   /* Paper and ink */
   --paper:        #fbfbfa;
@@ -42,10 +66,26 @@
   --s5: 24px; --s6: 32px; --s7: 48px;
 
   --r-sm: 3px;   /* day cells        */
-  --r-md: 6px;   /* buttons, pills   */
+  --r-md: 6px;   /* small plates     */
 
-  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Cantarell,
-          "Noto Sans", sans-serif;
+  /* The drawn-by-hand corner: eight values, the two axes of every corner
+     disagreeing slightly, so no corner matches another and the outline reads
+     as drawn rather than constructed. Two variants alternated between
+     neighbours — the giveaway of this trick is every box wobbling identically.
+
+     Deliberately modest. The widely copied version uses 255px/15px, which on a
+     small button is charming and on a 1080px panel is a lens, not a sketch.
+     Excalidraw's own corners are restrained: what reads as hand-drawn there is
+     the wobble of the stroke, not the size of the arc. These values hold their
+     shape from a 26px chip to a full-width plate. */
+  --r-rough:     9px 20px 12px 16px / 16px 10px 18px 12px;
+  --r-rough-alt: 18px 9px 16px 12px / 11px 18px 12px 16px;
+
+  /* Excalifont first, the system stack behind it. The fallback is not
+     decoration: it is what renders before the font loads and what covers any
+     glyph the subset does not carry. */
+  --font: "Excalifont", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+          Cantarell, "Noto Sans", sans-serif;
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Mono", Menlo,
           Consolas, monospace;
 }
@@ -249,7 +289,7 @@ h1 {
   font-size: 34px;
   font-weight: 600;
   line-height: 1.15;
-  letter-spacing: -0.022em;   /* large type tightens */
+  letter-spacing: 0;   /* a hand does not tighten; it collides */
   color: var(--ink);
   text-wrap: balance;
 }
@@ -259,7 +299,7 @@ h1 {
   color: var(--present-ink);
   background: var(--present);
   border: 1px solid var(--present);
-  border-radius: var(--r-md);
+  border-radius: var(--r-rough);
   padding: var(--s4) var(--s6);
   min-height: 48px;
   cursor: pointer;
@@ -303,7 +343,7 @@ h1 {
   color: var(--ink);
   background: var(--paper-inset);
   border: 1px solid var(--rule-faint);
-  border-radius: var(--r-md);
+  border-radius: var(--r-rough-alt);
   padding: var(--s2) var(--s3);
   white-space: nowrap;
 }
@@ -315,7 +355,7 @@ h1 {
   line-height: 1.45;
   color: var(--kraft);
   background: var(--kraft-dim);
-  border-radius: var(--r-md);
+  border-radius: var(--r-rough);
   padding: var(--s2) var(--s3);
   max-width: 48ch;
 }
@@ -353,7 +393,7 @@ h2 {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  letter-spacing: -0.006em;
+  letter-spacing: 0;
   color: var(--ink);
 }
 .panel-head a {
@@ -422,7 +462,7 @@ h2 {
    card is work in progress, not a verdict. */
 .repair {
   border: 1px solid var(--rule);
-  border-radius: var(--r-md);
+  border-radius: var(--r-rough);
   padding: var(--s5);
   margin-bottom: var(--s6);
 }
@@ -460,7 +500,7 @@ h2 {
 
 .side {
   border: 1px solid var(--rule-faint);
-  border-radius: var(--r-md);
+  border-radius: var(--r-rough-alt);
   padding: var(--s3);
   background: var(--paper-inset);
 }
@@ -483,7 +523,7 @@ h2 {
   color: var(--present-ink);
   background: var(--present);
   border: 1px solid var(--present);
-  border-radius: var(--r-md);
+  border-radius: var(--r-rough);
   padding: var(--s3) var(--s5);
   min-height: 40px;
   cursor: pointer;
@@ -498,7 +538,7 @@ h2 {
   color: var(--ink-2);
   background: transparent;
   border: 1px solid var(--rule);
-  border-radius: var(--r-md);
+  border-radius: var(--r-rough-alt);
   padding: var(--s2) var(--s3);
   cursor: pointer;
 }
@@ -630,7 +670,7 @@ h2 .rail-chip { margin-left: var(--s2); }
   color: var(--ink);
   background: var(--paper-inset);
   border: 1px solid var(--rule-faint);
-  border-radius: var(--r-md);
+  border-radius: var(--r-rough);
   padding: var(--s3);
   min-height: 40px;
   width: 100%;
@@ -657,7 +697,7 @@ h2 .rail-chip { margin-left: var(--s2); }
   color: var(--ink-3);
   background: transparent;
   border: 1px solid var(--rule-faint);
-  border-radius: var(--r-md);
+  border-radius: var(--r-rough-alt);
   padding: var(--s2) var(--s3);
   cursor: pointer;
 }
