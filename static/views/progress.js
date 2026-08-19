@@ -118,6 +118,8 @@ function renderNext(next) {
   detail.hidden = false;
   detail.textContent = "Todavía no hay ningún mazo en ese nivel";
   $("add-cards").hidden = false;
+  $("add-cards").dataset.skill = next.skill;
+  $("add-cards").dataset.level = next.level;
 }
 
 function renderRails(data) {
@@ -184,7 +186,12 @@ export async function render(root) {
       (d) => `Anki está en “${d.deck}”, con ${plural(d.due, "tarjeta", "tarjetas")}. ` +
              `Si la ventana no saltó al frente, cambiá a ella.`));
 
-  $("add-cards").addEventListener("click", () =>
-    handOverToAnki("/api/add-cards", $("add-cards"), "Abriendo Anki…",
-      () => "Anki abrió el diálogo de añadir. Si la ventana no saltó al frente, cambiá a ella."));
+  // El hueco viaja en la ruta, así que la pantalla de generación ya sabe qué
+  // nivel venís a llenar y le pide al modelo términos para ese nivel.
+  $("add-cards").addEventListener("click", () => {
+    const { skill, level } = $("add-cards").dataset;
+    location.hash = skill && level
+      ? `#/agregar/${slug(skill)}/${level}`
+      : "#/agregar";
+  });
 }

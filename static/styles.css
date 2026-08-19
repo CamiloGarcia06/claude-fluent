@@ -881,6 +881,240 @@ h2 .rail-chip { margin-left: var(--s2); }
   .rail { grid-column: 1 / -1; }
 }
 
+/* ── Agregar tarjetas ─────────────────────────────────────────────────
+   La pantalla donde el modelo propone y vos aprobás, así que todo aquí está
+   hecho para decidir: nada viene tildado, cada fila se puede editar antes de
+   existir, y lo que ya tenés se muestra apagado en vez de esconderse. */
+.termbox {
+  display: block;
+  width: 100%;
+  margin-top: var(--s4);
+  font: 400 15px/1.5 var(--font);
+  color: var(--ink);
+  background: var(--paper-inset);
+  border: 1px solid var(--rule-faint);
+  border-radius: var(--r-rough);
+  padding: var(--s3);
+  resize: vertical;
+}
+.termbox::placeholder { color: var(--ink-4); }
+
+.sub-note {
+  margin: var(--s3) 0 0;
+  font-size: 13px;
+  color: var(--ink-3);
+  max-width: 72ch;
+}
+
+/* Los términos propuestos, con su porqué. Dos columnas de verdad y la frase
+   partiendo como frase: en `.rows` la segunda columna es una cifra mono que no
+   parte, y una explicación entera metida ahí aplastaba el término hasta
+   dejarlo en un carácter por línea. */
+.reasons { display: grid; gap: 0; margin-top: var(--s4); }
+.reason-row {
+  display: grid;
+  grid-template-columns: 14rem 1fr;
+  align-items: baseline;
+  gap: var(--s4);
+  padding: var(--s2);
+  border-bottom: 1px solid var(--rule-faint);
+}
+.reason-row:last-child { border-bottom: 0; }
+.reason-term { font-size: 15px; color: var(--ink); overflow-wrap: anywhere; }
+.reason-why { font-size: 13px; line-height: 1.5; color: var(--ink-3); }
+@media (max-width: 880px) {
+  .reason-row { grid-template-columns: 1fr; gap: var(--s1); }
+}
+
+/* Mientras genera — una fila por término, en cola, corriendo o lista. */
+.gen-progress { display: grid; gap: var(--s2); margin-top: var(--s4); }
+.gen-row {
+  display: grid;
+  grid-template-columns: 12rem 1fr 10rem;
+  align-items: center;
+  gap: var(--s4);
+  padding: var(--s2);
+}
+.gen-term { font-size: 15px; color: var(--ink); }
+.gen-track {
+  height: 8px;
+  border-radius: var(--r-sm);
+  background: var(--paper-inset);
+  box-shadow: inset 0 0 0 1px var(--rule-faint);
+  overflow: hidden;
+}
+.gen-bar {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-sm);
+  background: var(--ink);
+  transform: scaleX(0);
+  transform-origin: left;   /* la barra escala, nunca anima el ancho */
+}
+.gen-note {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  text-align: right;
+}
+/* En cola es papel sin marcar; el término que está corriendo es el aquí y
+   ahora de esta pantalla y lleva el acento, como hoy en el calendario. */
+.gen-row[data-state="pending"] { opacity: 0.55; }
+.gen-row[data-state="running"] .gen-note { color: var(--present); }
+.gen-row[data-state="error"] .gen-note { color: var(--alarm); }
+
+/* Las candidatas. Cuatro columnas y una regla entre filas, la misma lista de
+   siempre — no una tabla con bordes, que convertiría cada tarjeta en una caja. */
+.cands { display: grid; gap: 0; margin-top: var(--s4); }
+.cand-row {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr 1.4fr auto;
+  align-items: baseline;
+  gap: var(--s4);
+  padding: var(--s3) var(--s2);
+  border-bottom: 1px solid var(--rule-faint);
+}
+.cand-row:last-child { border-bottom: 0; }
+.cand-head {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.10em;
+  color: var(--ink-4);
+  border-bottom: 1px solid var(--rule);
+}
+/* El término, dentro de la misma tabla: una fila de grupo, no un panel aparte.
+   La cabecera FRONT · BACK · EJEMPLO se lee una vez arriba de todo. */
+.cand-group {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s5) var(--s2) var(--s2);
+  border-bottom: 1px solid var(--rule-faint);
+}
+.cand-group:first-of-type { padding-top: var(--s4); }
+.cand-group-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+  flex-wrap: wrap;
+}
+.cand-term { font-size: 16px; font-weight: 600; color: var(--ink); }
+.cand-group-head .deck-pick { margin-left: auto; }
+
+/* El mazo nuevo se arma con la convención, no escribiendo una ruta a mano:
+   Skill::Level::Topic es de donde cuelgan todos los niveles de la app. */
+.deck-new {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex-wrap: wrap;
+  padding: var(--s2) 0 0;
+}
+.deck-new .cand-input { flex: 1; min-width: 12rem; }
+.deck-preview {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--ink-4);
+  white-space: nowrap;
+}
+
+.linkish {
+  font: inherit;
+  color: var(--present);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.cand-text { font-size: 15px; color: var(--ink); overflow-wrap: anywhere; }
+.cand-example .cand-text { font-size: 13px; color: var(--ink-3); }
+.cand-front { display: flex; align-items: baseline; gap: var(--s2); min-width: 0; }
+
+.cand-box { width: 16px; height: 16px; accent-color: var(--present); cursor: pointer; }
+
+/* Ya la tenés: se muestra, apagada. Esconderla dejaría la duda de si el
+   modelo la olvidó o si ya existía. */
+.cand-row[data-dup="true"] { opacity: 0.55; }
+
+.cand-edit {
+  font: 400 12px/1 var(--font);
+  color: var(--ink-3);
+  background: transparent;
+  border: 0;
+  padding: var(--s1) var(--s2);
+  cursor: pointer;
+}
+.cand-edit:hover { color: var(--ink); text-decoration: underline; }
+
+.cand-input {
+  width: 100%;
+  font: 400 15px/1.4 var(--font);
+  color: var(--ink);
+  background: var(--paper-inset);
+  border: 1px solid var(--rule-blue);
+  border-radius: var(--r-sm);
+  padding: var(--s1) var(--s2);
+}
+
+.deck-pick {
+  font: 400 13px/1 var(--font);
+  color: var(--ink);
+  background: var(--paper-inset);
+  border: 1px solid var(--rule-faint);
+  border-radius: var(--r-md);
+  padding: var(--s2);
+  max-width: 24rem;
+}
+
+/* El pie se pega abajo: la decisión de escribir tiene que estar siempre a la
+   vista, aunque la lista sea larga. */
+.gen-foot {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
+  margin-top: var(--s6);
+  padding: var(--s3) var(--s4);
+  background: var(--paper);
+  border-top: 1px solid var(--rule);
+}
+/* El resultado de escribir, al lado del botón que lo hizo. Rojo sólo cuando
+   el sistema falló, que es la única licencia que tiene ese color acá. */
+.foot-msg {
+  flex: 1;
+  font-size: 13px;
+  color: var(--ink-3);
+  text-align: right;
+}
+.foot-msg[data-ok="false"] { color: var(--alarm); }
+
+.gen-foot button {
+  font: 600 15px/1 var(--font);
+  color: var(--present-ink);
+  background: var(--present);
+  border: 1px solid var(--present);
+  border-radius: var(--r-rough);
+  padding: var(--s3) var(--s5);
+  min-height: 40px;
+  cursor: pointer;
+}
+.gen-foot button:hover:not(:disabled) { filter: brightness(1.08); }
+.gen-foot button:disabled { opacity: 0.5; cursor: default; }
+
+@media (max-width: 880px) {
+  .gen-row { grid-template-columns: 1fr auto; }
+  .gen-track { grid-column: 1 / -1; }
+  .cand-row { grid-template-columns: auto 1fr auto; }
+  .cand-example { grid-column: 2 / -1; }
+}
+
 /* ── Search ───────────────────────────────────────────────────────────── */
 .search {
   font: 400 15px/1 var(--font);

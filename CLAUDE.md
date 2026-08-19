@@ -28,8 +28,10 @@ looks normal while it lies to you.
 | `analysis.py` | **Pure functions** over a list of reviews. No I/O, no clock — every function takes its data and its reference date, so it is testable without Anki. |
 | `snapshot.py` | **The only write path into Anki.** Records the previous state, then holds the lock while the write happens. |
 | `repair.py` | Prompt and schema for rewriting a stuck card. Proposes only, never writes. |
+| `generate.py` | Prompts, schemas and the note type for card generation. Proposes only. Everything the model returns is treated as untrusted: the skill and the level must be ones this app knows, and the topic is scrubbed. |
 | `llm.py` | `claude -p` wrapper. Checks `is_error` on stdout, never uses `--bare`. |
 | `seed_cards.py` | Development fixture, not part of the app. Creates deliberately defective cards in `claude-fluent-test`. |
+| `reorganize.py` | One-off, not part of the app. Put the collection under the naming convention: 12 decks folded into 5, 1315 cards moved. Dry run unless `--yes`. |
 | `spike_anki.py`, `spike_claude.py` | Phase 0 connection probes. Kept as the record that the architecture works. |
 | `static/index.html` | A shell: left sidebar, `#offline`, `<main id="view">`. No screen markup. |
 | `static/app.js` | Entry point, three lines. Everything is in `router.js`. |
@@ -52,7 +54,10 @@ cases checked in seconds.
 | `GET /api/catalog` | Skill → level → decks, with maturity, the level you stand on, the holes and what is next. Feeds Progreso, the five skill screens, Mazos and the skill meters on Hoy. |
 | `GET /api/stuck` | The full stuck ranking with severity and the minutes it costs |
 | `POST /api/study` | Hands the session to Anki's reviewer. `?deck=` picks one; without it the busiest wins. 409 when nothing is due — including when the named deck has nothing. |
-| `POST /api/add-cards` | Opens Anki's Add dialog |
+| `POST /api/add-cards` | Opens Anki's Add dialog. The escape hatch at the foot of Agregar, not a screen's main action |
+| `POST /api/generate/terms` | What is worth studying next. An optional `{topic}` — whatever is in the box — is opened into its terms; without it, the stuck cards and the empty levels answer. An optional `{skill, level}` narrows either to one hole. **Writes nothing.** |
+| `POST /api/generate/cards` | Candidates for **one** term plus the deck they belong in. One term per request: each is its own 8–18 s `claude -p` call. **Writes nothing.** |
+| `POST /api/notes` | Creates the approved cards. Ensures the note type, then one `snapshot.add_notes` per deck. Reports what Anki refused and why, per card |
 | `POST /api/repair/{note_id}` | Asks the model for a better card. **Writes nothing.** |
 | `POST /api/apply/{note_id}` | Snapshots, then writes the approved fields |
 
@@ -63,7 +68,7 @@ focus stealing, so Anki changes screen but stays behind.
 
 ## Writing to Anki
 
-`anki.call()` **refuses the 22 actions in `anki.WRITE_ACTIONS`** and raises
+`anki.call()` **refuses the 49 actions in `anki.WRITE_ACTIONS`** and raises
 `WriteWithoutSnapshot` unless `snapshot.py` is holding the lock. The rule is
 structural, not a convention: forgetting to record the previous state raises
 instead of quietly succeeding, and the lock closes again on the way out.
@@ -77,13 +82,23 @@ Use `snapshot.update_note_fields()` rather than opening the block by hand.
 `snapshot.restore()` puts a note back and takes its own snapshot first — undoing
 an undo has to be possible too.
 
+**Renaming and merging are the same write, and it needs a move record.**
+AnkiConnect has no `renameDeck`: it is `createDeck` + `changeDeck` +
+`deleteDecks`, and after the middle one nothing in the collection remembers
+where each card lived. `snapshot.move_cards()` writes the card → deck map to
+`move-*.json` first, `undo_move()` puts every card back where it came from, and
+`delete_empty_deck()` refuses to fire until Anki itself confirms the deck holds
+nothing.
+
 **Two kinds of write, two kinds of record.** Overwriting or deleting can lose
 data, so it saves the previous state first. Creating cannot lose anything —
 there is no previous state — so it leaves a *creation record* instead: the ids
 it made, so `snapshot.undo_creation()` removes exactly those and nothing else,
-snapshotting each one on the way out in case it was edited since. Both live in
-`data/snapshots/`: `created-*.json` are creation records, `<note_id>-*.json` are
-snapshots. Additive actions still go through `snapshot.py`; nothing reaches Anki
+snapshotting each one on the way out in case it was edited since. A note type is a third
+case again: it cannot be deleted through AnkiConnect at all, so `model-*.json`
+records what was created as evidence rather than as an undo. All three live in
+`data/snapshots/`: `created-*.json` are creation records, `model-*.json` note
+types, `move-*.json` moves, `<note_id>-*.json` snapshots. Additive actions still go through `snapshot.py`; nothing reaches Anki
 any other way.
 
 This has already paid for itself once: eight seeded notes were deleted by an
@@ -94,6 +109,98 @@ That flag now refuses to fire without `--yes`.
 `anki.to_field_html()` on the way in. `strip_html()` collapses newlines and is
 for single-line list rows only — using it on a value you are about to write
 flattens the card. Snapshots store the **raw** value so a restore is exact.
+
+## Generating cards
+
+The flow is **propose, approve, write**, and the three steps are three
+different requests. `POST /api/generate/terms` reads the stuck ranking and the
+holes and says what is worth making cards for. `POST /api/generate/cards` takes
+**one** term and returns up to three candidates — different senses of it, never
+rewordings — plus the deck it belongs in, as `Skill::Level::Topic`. Only
+`POST /api/notes` writes, and only what was ticked on the screen.
+
+**Agregar is the only door.** Every "Agregar tarjetas" and "+ mazo nuevo" in
+the app routes to `#/agregar` — Hoy and the Dashboard when nothing is due,
+Progreso and the skill screens from a hole, Mazos from its header. None of them
+opens Anki's Add dialog any more: a card this app creates goes through propose
+→ approve → write, and a deck is created by writing its first card. Arriving
+from a hole carries it in the route, `#/agregar/Grammar/A1`, and the terms are
+then proposed **for that level** rather than for the collection at large. The
+dialog is still reachable, as a link at the foot of that one screen.
+
+**The box is the question.** Whatever is written in it seeds "Proponer
+términos": a subject — "verbos modales" — is opened into the terms it is made
+of, `can`, `could`, `must vs have to`. Empty, the failures and the holes answer
+instead. Ignoring what was typed and proposing from the failures anyway is the
+bug this replaced.
+
+**A subject is not a term.** Sent to `POST /api/generate/cards`, "verbos
+modales" comes back as `not_a_term` with a sentence saying which button opens
+it. A card whose front reads "verbos modales" teaches nothing, and generating
+one silently is worse than refusing.
+
+**One term, one call, in series.** A batch call takes as long as the sum of its
+parts with nothing to show meanwhile, and one bad term poisons the whole
+answer. In series the screen fills in as each term lands, a failure costs that
+term alone, and the machine never has ten `claude` processes at once.
+
+**Deck names from the model are untrusted.** `generate.deck_for()` accepts only
+a skill in `analysis.SKILLS` and a level in `analysis.LEVELS`, and scrubs `::`
+out of the topic so a topic cannot invent a level of its own. Anything else
+comes back as no deck at all and the screen asks you to pick one: a card filed
+under a level that does not exist is worse than an unfiled card.
+
+**A grammar card is an exercise, not a word pair.** When the model files a
+term under Grammar, the three candidates become three exercises on the same
+point — `Traducir:` a Spanish sentence, `Corregir:` an English one carrying
+exactly the mistake a Spanish speaker makes, `Completar:` a gap with the cue —
+and `Ejemplo` holds the rule in one sentence. It is the shape of the deck that
+was already there, `A · traducir · B · corregir · C · completar`.
+
+**Filling a hole and rounding out a level are different questions.** With a
+focus on a level that already has decks, `/api/generate/terms` reads up to 60
+of its existing cards and passes them in: the instruction is to name what is
+missing, never what is there. Without that the model proposes the cards you
+have been reviewing for months.
+
+**The deck is per term, and yours to change.** The model suggests one deck
+for each term — `put up with` is Grammar B1 and `nevertheless` is Writing B2,
+and a single deck for the whole run breaks the convention everything else hangs
+off. The picker offers the suggestion, every existing deck, and "Mazo nuevo…",
+which builds the name out of skill + level + topic instead of letting you type
+a path that will not classify.
+
+**AnkiConnect refuses the batch, not the note.** `addNotes` raises for all of
+them if one is empty or duplicated — it does **not** return a null in that
+slot, whatever the documentation suggests. One duplicate took thirty approved
+cards down with it, and the deck was left created and empty with no creation
+record. `snapshot.add_notes` now asks `canAddNotesWithErrorDetail` first, writes
+only what Anki will take, reports the rest with its reason, and — if the write
+raises anyway — reads the deck back and records whatever landed, because a note
+without a record is a note with no way back.
+
+**Cards the person ticked are written with `allowDuplicate: True`.** Three
+senses of `nevertheless` share a front and are three real cards. The screen has
+already greyed anything whose front is in the collection; Anki's duplicate
+warning is its own UI's concern, not a veto over a card you approved.
+
+**Duplicates are shown, never hidden.** `anki.existing_with_front()` searches
+the whole collection, not just the note type being written, because Anki's own
+duplicate check only looks inside one note type and would miss every Basic card
+already there. A match is offered as "ya la tenés", greyed and unticked.
+
+### The note type
+
+Cards are written as **`claude-fluent`** — `Front · Back · Ejemplo` — created on
+first use by `snapshot.ensure_model()`. Stock Basic has nowhere to put the
+example sentence, and the example is what makes a vocabulary card usable rather
+than a word pair you can recite without understanding.
+
+Creating a note type is the most delicate write in the app: templates are
+shared by every card of that type, and **AnkiConnect has no `deleteModel`** —
+only Anki's own GUI can remove one. So `model-*.json` is **evidence, not a way
+back**: it records exactly what was created, which is what you need to
+reproduce or repair it by hand.
 
 ## The repair flow
 
@@ -135,8 +242,9 @@ keeping them apart is what makes Progreso a diagnosis instead of a progress bar.
 
 No framework, no build step, no npm. Save a file, reload the browser.
 
-- **Eight screens, hash routing.** `#/hoy`, `#/progreso`, `#/skill/<skill>`,
-  `#/mazos`, `#/atascos`, `#/ajustes`, `#/dashboard`. Hash and not path:
+- **Nine screens, hash routing.** `#/hoy`, `#/progreso`, `#/skill/<skill>`,
+  `#/mazos`, `#/agregar` (also `#/agregar/<skill>/<level>`), `#/atascos`,
+  `#/ajustes`, `#/dashboard`. Hash and not path:
   `StaticFiles` is mounted at the root and knows nothing about `/progreso`, so
   reloading a path route would 404.
 - **Hoy and Dashboard are two screens, not one.** Hoy is Pantalla 1 v2 of the
@@ -204,7 +312,12 @@ No framework, no build step, no npm. Save a file, reload the browser.
   showing up today: streak, cards due, 30-day calendar.
 - **The streak has one grace day per month.** Breaking it is the moment of
   highest abandonment risk.
-- **Never write to Anki without recording the previous state.** Editing notes
+- **Never write to Anki without recording the previous state.** Additive
+  writes leave a creation record instead, and a note type leaves evidence,
+  since it cannot be deleted.
+- **Nothing generated is ticked by default.** Every card is a decision. The
+  model proposing thirty cards and a single "aceptar todo" is how a collection
+  fills with cards nobody chose. Editing notes
   has no undo.
 - **The model proposes, I approve.** Never write to the collection automatically.
 
@@ -246,6 +359,22 @@ A revlog row is
   returns everything.
 - **`notesInfo` returns an empty object, not an error, for a note that no longer
   exists.** Truthiness is the check; a list of the right length proves nothing.
+- **`addNotes` is all-or-nothing.** One bad note raises for the whole call —
+  `['cannot create note because it is a duplicate']` — instead of returning a
+  null for that slot. Check with `canAddNotesWithErrorDetail` before writing.
+- **A deck created through AnkiConnect gets the default options preset.**
+  `createDeck` takes no preset, so a merge moves the cards with their
+  scheduling intact — intervals, maturity, due dates — into a deck whose daily
+  limits are the factory ones. `Refold Inglés-mil` served 988 reviews a day
+  under its own preset; as `Reading::A1::Mil palabras` it serves 200, and the
+  993 due cards look like 200 in Anki's deck browser. `getDeckStats` reports
+  the capped number, which is the honest one: it is what Anki will actually
+  give you today.
+- **`deck:"X"` is not deck membership.** In this collection
+  `findCards deck:"Refold Inglés-mil"` returned 1000 cards and six of them
+  lived in another deck entirely. Confirm with `cardsInfo` and compare
+  `deckName` before moving anything, or a merge quietly takes cards out of a
+  deck you were not touching.
 - **`getReviewsOfCards` needs integer ids** and returns named dicts
   (`ease`, `ivl`, `lastIvl`, `time`), which is far easier to read than the raw
   revlog rows. Strings silently return nothing.
@@ -301,30 +430,33 @@ The `interface-design` skill is installed in `.claude/skills/`, with
   The app itself no longer makes that mistake; the spike was left as written.
 - `data/state.json` does not exist yet, so `/api/health` reports
   `last_sync: null` unconditionally and the dials on Ajustes are read-only.
-- **The collection follows none of the convention.** It holds
-  `claude-fluent-test`, `Default` and `mindtech_odoo_interview`, so every level
-  of every skill is a hole and Progreso renders empty rails. That is the
-  diagnosis working, not a bug — but it means generation is what makes these
-  screens say anything.
+- The collection also holds the decks of a master's degree (`PLN in Action`),
+  which are not English and are deliberately left outside the convention. They
+  land in "sin clasificar" — but they still count towards the streak, the
+  calendar, the weekly bars and the stuck ranking, because `/api/today` reads
+  every review in the collection. Scoping those to the English decks is not
+  built.
 - Mazos lists and searches but cannot rename or archive yet.
 - **AnkiConnect has no `renameDeck`** — verified against the 121 actions of
-  `apiReflect`. Renaming is `createDeck` + `changeDeck` + `deleteDecks`, three
-  chained destructive writes, and it needs a third kind of record next to the
-  snapshot and the creation record: a move record with the card → deck map.
-- **`WRITE_ACTIONS` has a hole.** None of the note-type actions are in it —
-  `createModel`, `updateModelTemplates`, `updateModelStyling`, `modelFieldAdd`,
-  `modelTemplateAdd`, and the deck-config ones. They reach `call()` without a
-  snapshot. Nothing writes note types yet; the card templates will be the first
-  thing that does, and the list has to grow **before** that, not after.
+  `apiReflect`. `snapshot.move_cards()` now covers it, so a rename or a merge
+  is possible and reversible; what is still missing is the screen for it on
+  Mazos.
+- Card generation writes one note type and any number of decks, but **cannot
+  rename or move** anything afterwards: that still needs the move record that
+  Mazos is waiting on.
 
 ## Current status
 
-Eight screens navigate: Hoy, Progreso, the five skill libraries, Mazos,
+Nine screens navigate: Hoy, Progreso, the five skill libraries, Mazos, Agregar,
 Atascos, Ajustes and Dashboard. Hoy and the Dashboard read `/api/today`, and
 the Dashboard also reads `/api/catalog`, as Progreso, the skill screens and
 Mazos do; Atascos reads `/api/stuck`; repair works from both Hoy and Atascos.
 
-Not built: card generation (the thing that fills the holes), rename/archive on
-Mazos, writable settings, and the exercise mode.
+Card generation works end to end: propose terms from the failures or from one
+hole, three candidates per term in a single table, edit them in place, pick an
+existing deck or build a new one, and write with a creation record. Verified against the live collection — note type
+created, two cards written, read back from Anki, and undone from the record.
+
+Not built: rename/archive on Mazos, writable settings, and the exercise mode.
 
 (Update this section after each phase.)

@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 import analysis
 import anki
+import generate
 import llm
 import repair
 import snapshot
@@ -15,6 +16,18 @@ app = FastAPI(title="claude-fluent")
 
 # The Atascos screen is the whole ranking, not the head of it that Today shows.
 STUCK_LIMIT = 50
+
+# How many stuck cards the model is shown when asked what to study next. It
+# needs the shape of the problem, not the whole list.
+STUCK_FOR_PROMPT = 10
+
+# How many existing cards of a level the model is shown before proposing more
+# for it. Enough to see what is there, not so many that the prompt is a deck.
+FRONTS_FOR_PROMPT = 60
+
+# A ceiling on one write. Ten terms of three candidates is thirty cards, and
+# anything far above that is a bug in the client rather than a real approval.
+MAX_CARDS_PER_WRITE = 60
 
 
 @app.middleware("http")
@@ -144,6 +157,164 @@ def add_cards() -> dict:
         raise HTTPException(503, "AnkiConnect is not answering — is Anki running?")
     anki.open_add_cards()
     return {"ok": True}
+
+
+def _catalog() -> dict:
+    return analysis.catalog(anki.deck_card_stats(), anki.due_counts())
+
+
+def _stuck_with_text(limit: int) -> list[dict]:
+    """The stuck ranking with each card's front text merged in.
+
+    analysis.py stays pure, so the text is looked up here — the model needs to
+    read the cards, not their ids.
+    """
+    cards = analysis.struggling(anki.reviews_since(_window_start_ms()), limit=limit)
+    details = anki.card_summaries([c["card_id"] for c in cards])
+    for card in cards:
+        card["front"] = details.get(card["card_id"], {}).get("front", "")
+    return cards
+
+
+@app.post("/api/generate/terms")
+def generate_terms(payload: dict | None = None) -> dict:
+    """What is worth making cards for, read off the failures and the holes.
+    Proposes only: nothing is written and no card exists yet.
+
+    An optional `{skill, level}` narrows the question to one hole — the screen
+    sends it when you arrived from a level with no deck at all. An optional
+    `{topic}` is whatever was typed in the box: a subject to open into its
+    terms rather than something to ignore.
+    """
+    if not anki.is_alive():
+        raise HTTPException(503, "AnkiConnect is not answering — is Anki running?")
+
+    focus = generate.focus_for(
+        (payload or {}).get("skill", ""), (payload or {}).get("level", ""))
+
+    catalog = _catalog()
+
+    # Lo que ese nivel ya tiene, para que "enriquecer" no proponga lo que ya
+    # estudiás. Sólo se lee cuando hay foco: sin él la pregunta es la colección
+    # entera y la lista no cabría en el prompt.
+    have: list[str] = []
+    if focus:
+        for skill in catalog["skills"]:
+            if skill["skill"] != focus["skill"]:
+                continue
+            for level in skill["levels"]:
+                if level["level"] != focus["level"]:
+                    continue
+                for deck in level["decks"]:
+                    have += anki.deck_fronts(deck["deck"], limit=FRONTS_FOR_PROMPT)
+
+    try:
+        return generate.propose_terms(
+            _stuck_with_text(STUCK_FOR_PROMPT), catalog, focus,
+            topic=(payload or {}).get("topic", ""), have=have)
+    except llm.LLMError as e:
+        raise HTTPException(502, f"claude -p failed: {e}") from e
+
+
+@app.post("/api/generate/cards")
+def generate_cards(payload: dict) -> dict:
+    """Candidate cards for one term, and the deck they belong in.
+
+    One term per request on purpose: each is its own `claude -p` call of 8-15s,
+    so the screen fills in as they land instead of staring at one long spinner,
+    and a term that fails costs only itself.
+    """
+    if not anki.is_alive():
+        raise HTTPException(503, "AnkiConnect is not answering — is Anki running?")
+
+    term = str(payload.get("term", "")).strip()
+    if not term:
+        raise HTTPException(400, "no term")
+    if len(term) > 80:
+        raise HTTPException(400, "term too long")
+
+    try:
+        return generate.propose_cards(term, _catalog())
+    except llm.LLMError as e:
+        raise HTTPException(502, f"claude -p failed: {e}") from e
+
+
+def _clean_deck_name(value: str) -> str:
+    """A deck name is a path in the collection, so it is checked rather than
+    trusted: no empty components, no stray separators, no runaway length."""
+    parts = [p.strip() for p in str(value or "").split("::")]
+    if not parts or any(not p for p in parts) or len(value) > 200:
+        raise HTTPException(400, f"invalid deck name: {value!r}")
+    return "::".join(parts)
+
+
+@app.post("/api/notes")
+def add_notes(payload: dict) -> dict:
+    """Create the approved cards. The one write path for generation.
+
+    The model proposes and you approve: this endpoint only ever receives cards
+    that were ticked on the screen. It creates the note type if it is missing —
+    with its own record, since AnkiConnect cannot delete one — and then writes
+    each deck's cards through snapshot.add_notes, which leaves a creation
+    record so exactly these notes can be removed again.
+    """
+    if not anki.is_alive():
+        raise HTTPException(503, "AnkiConnect is not answering — is Anki running?")
+
+    cards = payload.get("cards")
+    if not isinstance(cards, list) or not cards:
+        raise HTTPException(400, "no cards to add")
+    if len(cards) > MAX_CARDS_PER_WRITE:
+        raise HTTPException(400, f"more than {MAX_CARDS_PER_WRITE} cards in one write")
+
+    by_deck: dict[str, list[dict]] = {}
+    for card in cards:
+        if not isinstance(card, dict):
+            raise HTTPException(400, "malformed card")
+        front = str(card.get("front", "")).strip()
+        back = str(card.get("back", "")).strip()
+        if not front or not back:
+            raise HTTPException(400, "a card needs both a front and a back")
+        deck = _clean_deck_name(card.get("deck"))
+        by_deck.setdefault(deck, []).append({
+            "model": generate.MODEL_NAME,
+            "tags": ["claude-fluent"],
+            # The client sends plain text; Anki stores HTML.
+            "fields": {
+                "Front": anki.to_field_html(front),
+                "Back": anki.to_field_html(back),
+                "Ejemplo": anki.to_field_html(str(card.get("example", "")).strip()),
+            },
+        })
+
+    model_record = snapshot.ensure_model(
+        generate.MODEL_NAME, generate.MODEL_FIELDS,
+        generate.MODEL_TEMPLATES, generate.MODEL_CSS,
+    )
+
+    written = []
+    for deck, notes in by_deck.items():
+        ids, record, refused = snapshot.add_notes(deck, notes)
+        # Read the result back from Anki rather than trusting the response of
+        # the call that wrote it: addNotes once returned eight ids for notes
+        # that were gone a minute later.
+        alive = [n for n in anki.call("notesInfo", notes=ids) if n] if ids else []
+        written.append({
+            "deck": deck,
+            "asked": len(notes),
+            "created": len(ids),
+            "verified": len(alive),
+            "refused": refused,
+            "record": str(record),
+        })
+
+    return {
+        "ok": True,
+        "added": sum(w["verified"] for w in written),
+        "refused": [r for w in written for r in w["refused"]],
+        "decks": written,
+        "model_created": str(model_record) if model_record else None,
+    }
 
 
 @app.post("/api/repair/{note_id}")

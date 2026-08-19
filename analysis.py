@@ -389,12 +389,16 @@ def catalog(deck_stats: list[dict], deck_counts: list[dict] | None = None) -> di
         card_counts["maturity"] = maturity(row["mature"], row["total"])
         card_counts["due"] = due.get(name, 0)
 
+        # Un padre vacío que sólo sostiene subdecks es andamiaje, no un mazo:
+        # `Reading::A1` sobre `Reading::A1::Mil palabras` lo crea Anki solo al
+        # crear el hijo, y contarlo lo mete en Mazos con cero tarjetas y con
+        # los pendientes del hijo prestados. Vale para los que la convención
+        # entiende igual que para los que no.
+        is_container = any(other.startswith(f"{name}::") for other in names)
+        if row["total"] == 0 and is_container:
+            continue
+
         if parsed is None:
-            is_container = any(
-                other.startswith(f"{name}::") for other in names
-            )
-            if row["total"] == 0 and is_container:
-                continue
             unclassified.append({"deck": name, **card_counts})
             continue
 

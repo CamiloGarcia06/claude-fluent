@@ -26,6 +26,9 @@ const MARKUP = `
     <div class="panel-head">
       <h2>Todos los mazos</h2>
       <span class="sub" id="deck-count"></span>
+      <!-- Un mazo no se crea vacío: se crea escribiéndole la primera tarjeta,
+           y eso pasa en Agregar. -->
+      <a href="#/agregar">+ mazo nuevo</a>
     </div>
     <ul id="deck-rows" class="rows"></ul>
   </section>

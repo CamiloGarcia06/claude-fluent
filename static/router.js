@@ -15,12 +15,14 @@ import * as decks from "/views/decks.js";
 import * as stuck from "/views/stuck.js";
 import * as settings from "/views/settings.js";
 import * as dashboard from "/views/dashboard.js";
+import * as add from "/views/add.js";
 
 const ROUTES = {
   hoy: today,
   progreso: progress,
   skill,
   mazos: decks,
+  agregar: add,
   atascos: stuck,
   ajustes: settings,
   dashboard,

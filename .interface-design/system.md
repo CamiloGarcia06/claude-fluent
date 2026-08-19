@@ -219,6 +219,54 @@ not `0 %` — a skill you never began is not one you failed.
 The five-segment A1–C1 rail stays on Progreso: here the question is which skill
 is furthest behind, not which level you are on.
 
+### Generation table (Agregar)
+**One table, not a panel per term.** The header FRONT · BACK · EJEMPLO is read
+once at the top and each term is a group row inside it, carrying its count and
+its deck picker on the right. A panel per term repeats the header three times
+and turns a list into a stack of boxes.
+**Nothing is ticked by default.** Every candidate is a decision — a screen that
+arrives with thirty cards pre-approved is not an approval step.
+Four columns on a hairline-separated list, never a bordered table: box · front ·
+back · example. Example at 13px `--ink-3`, a step behind the translation.
+A card you already own is shown at `opacity .55` with a mono `--ink-4` tag
+saying which deck it is in, and its box is disabled — hiding it would leave you
+wondering whether the model forgot it or you already had it. **No red:** an
+existing card is not an error.
+`editar` swaps the three cells for inputs bordered in `--rule-blue`, the same
+mark the repair panel puts on the side that would change.
+
+### Progress rows (Agregar)
+One row per term: name · 8px track · state. Queued rows sit at `opacity .55`
+(unmarked paper), the running one takes `--present` on its label — it is the
+here and now of that screen — and a failed one is the one place `--alarm`
+appears on this screen, because a `claude -p` that died is a failure of the
+system.
+The bar runs to `scaleX(.9)` over the measured 15s and only completes when the
+answer lands. A bar that reaches 100 % and keeps waiting is worse than no bar.
+
+### Proposed terms list
+Its own two-column row (`14rem 1fr`), **not `.rows`**: there the second column
+is a mono count with `white-space: nowrap`, so a whole sentence dropped into it
+squeezed the first column to one character per line and printed the term
+vertically. A reason is prose — 13px `--ink-3`, wrapping like prose.
+
+### Deck picker
+Suggestion first (tagged `· nuevo` when it does not exist yet), then every
+existing deck, then "Mazo nuevo…", which opens skill + level + topic controls
+and shows the resulting `Skill::Level::Topic` in mono `--ink-4` as you type.
+The name is never free text: the convention is what every level in the app is
+derived from, and a hand-typed path lands in "sin clasificar".
+
+### Sticky action bar
+The write decision stays on screen however long the list gets: `position:
+sticky; bottom: 0`, `--paper` ground, 1px `--rule` top edge, count on the left
+in 13px `--ink-3`, primary button on the right. Disabled at zero selected, and
+its label carries the number — "Agregar 3 tarjetas", never a bare "Agregar".
+**The outcome is reported in the bar itself**, right of the count: a write that
+failed said so in the hero, a full screen of scrolling above the button that
+had just been pressed, which is the same as not saying it. Red here only when
+the write actually failed — the one licence `--alarm` has on this screen.
+
 ### Streak pill
 mono 13/500 tabular · 8px 12px · 6px radius · `--paper-inset` on 1px `--rule-faint`
 

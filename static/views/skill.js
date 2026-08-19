@@ -5,7 +5,7 @@
 // It is not a review screen. Studying happens in Anki; the rows here only
 // decide which deck it opens on.
 
-import { $, el, emptyRow, plural, percent, getJSON, catalog } from "/ui.js";
+import { $, el, plural, percent, getJSON, catalog } from "/ui.js";
 import { rail, slug } from "/views/progress.js";
 
 const topicOf = (deck) => deck.split("::").pop();
@@ -60,8 +60,14 @@ function levelPanel(level, skill, threshold) {
   const list = el("ul", "rows");
   if (!level.decks.length) {
     // The hole is the finding, so it says what to do about it rather than
-    // leaving a blank where a list should be.
-    list.append(emptyRow("Sin mazos en este nivel. Es un hueco a generar."));
+    // leaving a blank where a list should be — and the way out is one click,
+    // carrying the level with it.
+    const li = el("li", "empty");
+    li.append(el("span", null, "Sin mazos en este nivel. "));
+    const fill = el("a", null, "Generar las primeras tarjetas");
+    fill.href = `#/agregar/${slug(skill.skill)}/${level.level}`;
+    li.append(fill);
+    list.append(li);
   } else {
     for (const deck of level.decks) list.append(deckRow(deck));
   }

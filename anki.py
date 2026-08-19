@@ -10,17 +10,47 @@ import httpx
 ENDPOINT = "http://127.0.0.1:8765"
 TIMEOUT_S = 10.0
 
+# Writes get longer: creating a note type is a schema change, and thirty notes
+# in one call is far more work than any read this app makes. A write that times
+# out is the worst possible outcome — it may or may not have happened.
+WRITE_TIMEOUT_S = 60.0
+
 # Every AnkiConnect action that mutates the collection. Editing notes has no
 # undo, so `call` refuses these outright unless a snapshot has been written
 # first. The guarantee lives here rather than in the callers: relying on each
 # call site to remember is exactly how a write slips through.
 WRITE_ACTIONS = frozenset({
+    # Notes and cards
     "addNote", "addNotes", "updateNote", "updateNoteFields", "updateNoteModel",
-    "updateNoteTags", "addTags", "removeTags", "deleteNotes", "removeNotes",
+    "updateNoteTags", "addTags", "removeTags", "replaceTags",
+    "replaceTagsInAllNotes", "clearUnusedTags", "deleteNotes", "removeNotes",
+    "removeEmptyNotes",
     "createDeck", "deleteDecks", "changeDeck", "moveCardsToDeck",
     "setDueDate", "forgetCards", "relearnCards", "suspend", "unsuspend",
-    "setSpecificValueOfCard", "storeMediaFile", "deleteMediaFile",
+    "setSpecificValueOfCard", "setEaseFactors", "answerCards", "insertReviews",
+    "storeMediaFile", "deleteMediaFile", "importPackage",
+
+    # Note types. A card template is shared by every note that uses it, so a
+    # bad edit here is not one broken card but every card of that type at once
+    # — and AnkiConnect has no deleteModel, so a note type created by mistake
+    # can only be removed from Anki's own GUI. These were missing while nothing
+    # wrote note types; card generation is what writes them, so the list grew
+    # before that landed rather than after.
+    "createModel", "updateModelTemplates", "updateModelStyling",
+    "modelFieldAdd", "modelFieldRemove", "modelFieldRename",
+    "modelFieldReposition", "modelFieldSetDescription", "modelFieldSetFont",
+    "modelFieldSetFontSize", "modelTemplateAdd", "modelTemplateRemove",
+    "modelTemplateRename", "modelTemplateReposition",
+    "findAndReplaceInModels",
+
+    # Deck options. Changing a preset re-schedules every deck that uses it.
+    "saveDeckConfig", "setDeckConfigId", "cloneDeckConfigId",
+    "removeDeckConfigId",
 })
+
+# Deliberately not guarded: the `gui*` actions. They open Anki's own dialogs
+# and it is the person in front of Anki who then writes — handing the session
+# over is the whole design of this app, not a write it performs.
 
 # Holds the path of the snapshot that authorises the current write, or None.
 _write_guard: ContextVar[str | None] = ContextVar("anki_write_guard", default=None)
@@ -77,7 +107,7 @@ def call(action: str, **params: Any) -> Any:
     response = httpx.post(
         ENDPOINT,
         json={"action": action, "version": 6, "params": params},
-        timeout=TIMEOUT_S,
+        timeout=WRITE_TIMEOUT_S if action in WRITE_ACTIONS else TIMEOUT_S,
     )
     data = response.json()
     if data["error"]:
@@ -273,6 +303,81 @@ def card_summaries(card_ids: list[int]) -> dict[int, dict]:
 
 # GUI actions. These drive Anki's own windows and never touch the collection,
 # so they are deliberately absent from WRITE_ACTIONS.
+
+def model_names() -> list[str]:
+    return call("modelNames")
+
+
+def model_exists(name: str) -> bool:
+    return name in model_names()
+
+
+def _escape_search(value: str) -> str:
+    """Quote a value for an Anki search term.
+
+    Colons, quotes, asterisks, underscores and backslashes are all syntax
+    inside an Anki query, so a card front carrying one of them would otherwise
+    search for something else entirely.
+    """
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def notes_in_deck_with_front(deck: str, text: str) -> set[int]:
+    """Note ids in one deck whose Front is exactly `text`.
+
+    Used to work out what a failed write actually created: AnkiConnect can
+    refuse a batch after part of it landed, and the ids it would have returned
+    are gone with the exception.
+    """
+    text = text.strip()
+    if not text:
+        return set()
+    query = f'deck:"{_escape_search(deck)}" "Front:{_escape_search(text)}"'
+    return set(call("findNotes", query=query))
+
+
+def deck_fronts(deck: str, limit: int = 60) -> list[str]:
+    """The first field of the notes in a deck, as plain text.
+
+    Read before proposing more cards for a level you already study: without it
+    the model happily proposes the twelve cards you have been reviewing for
+    months.
+    """
+    note_ids = call("findNotes", query=f'"deck:{_escape_search(deck)}"')[:limit]
+    if not note_ids:
+        return []
+    fronts = []
+    for note in call("notesInfo", notes=note_ids):
+        # No siempre el primer campo es la pregunta: el note type de gramática
+        # abre con "Tipo" y devolvería sesenta veces "A · traducir". Se juntan
+        # los dos primeros campos con algo escrito, que es lo que identifica la
+        # tarjeta.
+        values = [strip_html(v) for v in note_fields(note).values()]
+        values = [v for v in values if v][:2]
+        if values:
+            fronts.append(" · ".join(values)[:140])
+    return fronts
+
+
+def existing_with_front(text: str) -> list[dict]:
+    """Cards whose Front field is exactly `text`, with the deck they sit in.
+
+    Asked before creating a card, so a term already in the collection is
+    offered as "ya la tenés" instead of being added twice. Anki's own duplicate
+    check only looks inside one note type, which would miss every Basic card
+    already there — the whole seeded collection, to begin with.
+    """
+    text = text.strip()
+    if not text:
+        return []
+    card_ids = call("findCards", query=f'"Front:{_escape_search(text)}"')
+    if not card_ids:
+        return []
+    return [
+        {"note_id": card["note"], "deck": card["deckName"]}
+        for card in call("cardsInfo", cards=card_ids)
+    ]
+
 
 def open_deck_review(deck: str) -> None:
     """Put Anki into the reviewer on `deck`.

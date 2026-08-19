@@ -362,9 +362,10 @@ export async function render(root) {
       (d) => `Anki está en “${d.deck}”, con ${plural(d.due, "tarjeta", "tarjetas")}. ` +
              `Si la ventana no saltó al frente, cambiá a ella.`));
 
-  $("add-cards").addEventListener("click", () =>
-    handOverToAnki("/api/add-cards", $("add-cards"), "Abriendo Anki…",
-      () => "Anki abrió el diálogo de añadir. Si la ventana no saltó al frente, cambiá a ella."));
+  // Agregar tarjetas es una pantalla de esta app, no el diálogo de Anki: el
+  // modelo propone, vos aprobás y recién ahí se escribe. La escotilla a Anki
+  // sigue estando, abajo de esa pantalla.
+  $("add-cards").addEventListener("click", () => { location.hash = "#/agregar"; });
 
   // El catálogo ya lo pide la barra lateral en cada navegación, así que las
   // barras por habilidad no cuestan una petición extra: ui.catalog() reparte
