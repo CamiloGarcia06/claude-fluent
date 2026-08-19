@@ -55,6 +55,15 @@ export function formatLongDate(iso) {
   return `${weekday[0].toUpperCase()}${weekday.slice(1)} ${d.getDate()} de ${MONTHS[d.getMonth()]}`;
 }
 
+// L M X J V S D — the initial Spanish uses for each weekday, indexed by
+// getDay(). Sunday and Saturday share an S and Monday and Wednesday an M, so
+// the pair that collides takes X for miércoles, as a Spanish calendar does.
+const WEEKDAY_INITIALS = ["D", "L", "M", "X", "J", "V", "S"];
+
+export function weekdayInitial(iso) {
+  return WEEKDAY_INITIALS[parseDate(iso).getDay()];
+}
+
 export function plural(n, one, many) {
   return `${n} ${n === 1 ? one : many}`;
 }

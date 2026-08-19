@@ -360,6 +360,26 @@ h1 {
   max-width: 48ch;
 }
 
+/* ── La rejilla del tablero ───────────────────────────────────────────
+   Una sola rejilla de dos columnas, no dos columnas apiladas por separado.
+   Con dos columnas independientes cada panel arranca donde termina el de
+   arriba, así que "Progreso por habilidad" y "Mis mazos" caían a alturas
+   distintas y la fila dejaba de leerse como fila. Aquí las filas de la
+   rejilla las alinean solas, y `align-items: start` evita que el panel corto
+   se estire para alcanzar al alto.
+
+   1.35fr / 1fr, como el wireframe: la semana necesita ancho para siete
+   columnas, el anillo no crece de todos modos. */
+.dash {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: var(--s7);
+  align-items: start;
+}
+@media (max-width: 880px) {
+  .dash { grid-template-columns: 1fr; gap: var(--s6); }
+}
+
 /* ── Columns ──────────────────────────────────────────────────────────── */
 .columns {
   display: grid;
@@ -454,6 +474,203 @@ h2 {
   height: 2px;
   border-radius: 1px;
   background: var(--present);
+}
+
+/* ── La tira de figuras ───────────────────────────────────────────────
+   Cuatro cifras bajo el hero, separadas por la misma regla impresa que todo
+   lo demás. No son cuatro plaquitas con borde: cajas alrededor de cada dato
+   harían de cada cifra un panel más y aplanarían la jerarquía que el hero
+   acaba de establecer. Una ficha se divide con rayas, no con marcos. */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin: 0 0 var(--s7);
+}
+.stat {
+  display: grid;
+  gap: var(--s1);
+  align-content: start;
+  padding: 0 var(--s4);
+  border-left: 1px solid var(--rule-faint);
+}
+.stat:first-child { padding-left: 0; border-left: 0; }
+
+.stat-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+/* La única cifra grande fuera del hero. Mono y tabular porque todas cambian:
+   la racha además cuenta hacia arriba al cargar y saltaría en proporcional. */
+.stat-value {
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.stat-meta { font-size: 13px; color: var(--ink-3); }
+
+@media (max-width: 880px) {
+  .stats { grid-template-columns: 1fr 1fr; gap: var(--s4) 0; }
+  .stat:nth-child(odd) { padding-left: 0; border-left: 0; }
+}
+
+/* ── Actividad semanal ────────────────────────────────────────────────
+   El calendario dice si apareciste; estas barras dicen cuánto. Un día sin
+   repasos no dibuja nada sobre la línea base: papel sin marcar, igual que
+   una celda sin estudiar, y por el mismo motivo — la ausencia no acusa. */
+.week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--s2);
+  margin-top: var(--s4);
+}
+.bar-col { display: grid; gap: var(--s2); min-width: 0; }
+.bar-track {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  height: 96px;
+  border-bottom: 1px solid var(--rule-faint);
+}
+.bar-fill {
+  width: 100%;
+  background: var(--ink);
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  transform-origin: bottom;   /* la entrada escala, nunca anima la altura */
+}
+.bar-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.10em;
+  color: var(--ink-4);
+  text-align: center;
+}
+/* Días anteriores al primer repaso: el app no existía, no son días perdidos. */
+.bar-col[data-before="true"] { opacity: 0.4; }
+/* Hoy, con la misma marca que la última celda del calendario y el nivel en
+   el que estás parado. El acento significa lo mismo en las tres. */
+.bar-col[data-today="true"] .bar-label { color: var(--present); }
+.bar-col[data-today="true"] .bar-track::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -3px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--present);
+}
+
+/* ── El anillo — lo que va del día ────────────────────────────────────
+   Lo hecho hoy contra lo hecho más lo pendiente. Es la única fracción de
+   esta pantalla que se cierra apareciendo, así que lleva el acento: aquí y
+   ahora es exactamente lo que --present significa. */
+.ring {
+  display: grid;
+  justify-items: center;
+  gap: var(--s4);
+  margin-top: var(--s5);
+}
+.ring-wrap { position: relative; width: 160px; max-width: 100%; }
+.ring-dial { display: block; width: 100%; height: auto; }
+.ring-track { fill: none; stroke: var(--paper-inset); stroke-width: 10; }
+.ring-done {
+  fill: none;
+  stroke: var(--present);
+  stroke-width: 10;
+  stroke-linecap: round;
+  transform: rotate(-90deg);        /* el arco arranca arriba, no a las 3 */
+  transform-origin: center;
+}
+.ring-center {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 2px;
+}
+.ring-value {
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.ring-unit {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+.ring-foot { margin: 0; font-size: 13px; color: var(--ink-3); text-align: center; }
+
+/* La acción del Dashboard, y la única: aquí no hay botón en la cabecera, así
+   que el anillo carga con ella. Ancho completo bajo la esfera, como el
+   wireframe — un botón de 32px de padding centrado bajo un círculo de 160
+   parece una nota al pie. */
+.ring-action {
+  display: grid;
+  justify-items: stretch;
+  gap: var(--s3);
+  margin-top: var(--s5);
+}
+.ring-action .hint { grid-column: 1; margin: 0; text-align: center; }
+
+/* ── Una barra por habilidad ──────────────────────────────────────────
+   El vocabulario del riel A1–C1, en un solo tramo: aquí la pregunta es cuál
+   habilidad va última, no en qué nivel estás. Eso lo contesta Progreso, que
+   es adonde lleva cada fila. Una habilidad sin tarjetas queda en papel sin
+   marcar, no en cero por ciento. */
+.meters { display: grid; gap: var(--s1); margin-top: var(--s4); }
+.meter-row {
+  display: grid;
+  grid-template-columns: 10rem 1fr 3.5rem;
+  align-items: center;
+  gap: var(--s4);
+  padding: var(--s3) var(--s2);
+  border-bottom: 1px solid var(--rule-faint);
+  border-radius: var(--r-md);
+  text-decoration: none;
+}
+.meter-row:last-child { border-bottom: 0; }
+.meter-row:hover { background: var(--paper-inset); }
+.meter-row .count {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+  text-align: right;
+  white-space: nowrap;
+}
+.meter {
+  height: 8px;
+  border-radius: var(--r-sm);
+  background: var(--paper-inset);
+  box-shadow: inset 0 0 0 1px var(--rule-faint);
+  overflow: hidden;
+}
+.meter[data-empty="true"] { background: transparent; opacity: 0.4; }
+.meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-sm);
+  background: var(--ink);
+  transform-origin: left;   /* la entrada escala, nunca anima el ancho */
+}
+
+@media (max-width: 880px) {
+  .meter-row { grid-template-columns: 1fr auto; gap: var(--s3); }
+  .meter { grid-column: 1 / -1; }
+  .bar-track { height: 72px; }
 }
 
 /* ── Repair — the model proposes, you approve ─────────────────────────

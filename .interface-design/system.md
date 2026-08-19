@@ -89,7 +89,10 @@ a form that was typeset and then filled in by hand, which is exactly what an
 index card is. It also keeps `tabular-nums` — the animated streak counter would
 jitter on a proportional hand font.
 
-Sizes in use: **11 · 12 · 13 · 15 · 16 · 34** (28 for h1 under 880px).
+Sizes in use: **11 · 12 · 13 · 15 · 16 · 22 · 34** (28 for h1 under 880px).
+The 22 arrived with the dashboard and is the only figure size outside the
+utility band: the four stats and the ring's fraction. It is not a second hero
+size — it never carries a sentence, only a number, and always in mono.
 Weights: **500, 600** — 400 comes from the body default. Excalifont ships one
 real weight, so 500 and 600 are synthesised. The hierarchy survives because it
 never rested on weight alone: colour, family and size carry it.
@@ -115,6 +118,10 @@ Every figure that can change gets `font-variant-numeric: tabular-nums`.
 ## Patterns
 
 ### Button primary (`#start`)
+One per screen. On Hoy it sits in the hero; on the Dashboard it sits under the
+ring at full width — a 32px-padded button centred under a 160px circle reads as
+a footnote. Two copies of it on one screen turn the focal point into
+decoration, which is what merging Hoy into the Dashboard produced.
 48px min-height · 16px 32px padding · 6px radius · 16px/600 ·
 filled `--present`, text `--present-ink` ·
 hover `brightness(1.08)` · active `scale(.975)` · 110–140ms `cubic-bezier(.23,1,.32,1)`
@@ -156,6 +163,62 @@ fill `--ink` at the maturity percentage · level letter mono 11 `--ink-4` below
 - current level — letter turns `--present`, plus a 2px `--present` bar 4px
   below the track. The same mark today's cell carries.
 
+### Dashboard grid
+The Dashboard's four sections are cells of **one** two-column grid
+(`1.35fr 1fr`, 48px gap, `align-items: start`), never two independently stacked
+columns. With a column per side each panel begins where the one above it ends,
+so the second row lands at two different heights and stops reading as a row —
+the reason the first build of this screen was dizzying. 1.35/1 because the week
+needs width for seven columns and the ring does not grow either way.
+
+**What may sit on the Dashboard:** the four sections of the wireframe and
+nothing else. The 30-day calendar and the stuck cards stay on Hoy and Atascos,
+where they already were. And the Dashboard is **last in the menu**: Hoy is
+where you start, this is where you look.
+
+### Stat strip (dashboard)
+Four figures under the hero, `repeat(4, 1fr)`, divided by a 1px `--rule-faint`
+**left border** on every cell but the first — no plates. Four bordered cards
+would make each number a panel and flatten the hierarchy the hero just set; a
+card is divided with ruled lines, not with frames.
+label mono 11/500 uppercase `.10em` `--ink-4` · value mono 22/600 tabular
+`--ink` · meta 13px `--ink-3`.
+Under 880px it folds to two columns and the odd cells drop their rule.
+
+**What may be a stat:** only what depends on showing up today. Precisión and
+Tiempo estudiado were in the wireframe and stay out — they are cumulative, and
+a cumulative figure has no action attached to it.
+
+### Weekly bars
+Seven columns, 96px track (72px under 880px), a 1px `--rule-faint` baseline and
+no track fill. Bar `--ink`, `--r-sm` on the top corners only, `transform-origin:
+bottom`. A day with no reviews draws **nothing** above the baseline — unmarked
+paper, the calendar's rule. Days before the first ever review sit at
+`opacity .4`. Today's column takes the accent: the letter turns `--present` and
+a 2px `--present` bar sits 3px under the baseline — the same mark as today's
+calendar cell and the level you stand on.
+A single review is floored at 6 % of the track: below that the bar vanishes and
+a day you did study reads as empty.
+
+### Today's ring
+160px, `r 56`, 10px stroke. Track `--paper-inset`, arc `--present`, round cap,
+rotated `-90deg` so it starts at twelve. Centre: fraction mono 22/600 tabular
+`--ink` over a mono 11 uppercase `--ink-4` unit.
+It is **hecho hoy / (hecho + pendiente)** — the only fraction on the screen that
+closes by showing up, which is why it may hold the accent. With both at zero it
+draws no ring at all: an empty dial at 0 % is the bleakest possible reading of a
+day with nothing scheduled.
+It carries **no button.** The wireframe repeated "Empezar sesión" under it; two
+copies of the primary action 400px apart turn the focal point into decoration.
+
+### Skill meter (dashboard)
+The rail's vocabulary in a single 8px segment: `--paper-inset` track with an
+inset hairline, `--ink` fill at the maturity share, `transform-origin: left`.
+A skill with no cards is transparent at `opacity .4` and its count reads `—`,
+not `0 %` — a skill you never began is not one you failed.
+The five-segment A1–C1 rail stays on Progreso: here the question is which skill
+is furthest behind, not which level you are on.
+
 ### Streak pill
 mono 13/500 tabular · 8px 12px · 6px radius · `--paper-inset` on 1px `--rule-faint`
 
@@ -164,8 +227,8 @@ mono 13/500 tabular · 8px 12px · 6px radius · `--paper-inset` on 1px `--rule-
 
 ## Motion
 
-Only the Today screen animates, and only on load. The review flow gets nothing:
-anything you cross a hundred times must be instant.
+Only Hoy and the Dashboard animate, and only on load. The review flow gets
+nothing: anything you cross a hundred times must be instant.
 
 **Budget: the whole entrance ends at 300ms.** `TOTAL_MS 300 · DURATION_MS 190`,
 and the cascade takes whatever slack is left — `stagger = (300-190)/(n-1)`. Adding
@@ -173,9 +236,17 @@ decks or struggling cards changes the step, never the total.
 
 | Element | Animation |
 |---|---|
-| Calendar days | `opacity [0,1]` + `scale [.85,1]`, staggered, `outQuad` |
 | Deck and struggling rows | `opacity [0,1]` + `y [6,0]`, staggered, `outQuad` |
-| Streak | counts up to its value over 300ms, `outExpo`; skipped at zero |
+| Calendar days | `opacity [0,1]` + `scale [.85,1]`, staggered, `outQuad` |
+| Weekly bars | `scaleY [0,1]` from the base, staggered, `outQuad` |
+| Skill meters | `scaleX [0,1]` from the left, staggered, `outQuad` |
+| Today's ring | `stroke-dashoffset` from empty to its share over 300ms, `outExpo` |
+| Streak | counts up to its value over 300ms, `outExpo`; skipped at zero — the pill on Hoy, the stat on the Dashboard |
+
+`scaleY`/`scaleX` and not `height`/`width`: the bars and the meters would
+reflow their whole row on every frame. `stroke-dashoffset` is the one property
+animated that is neither opacity nor a transform — it repaints a stroke and
+never touches layout, which is what the rule is actually protecting.
 
 Rules that hold for anything added later:
 
@@ -214,7 +285,9 @@ easy case; these are the ones that decide whether it feels encouraging.
 | Nothing due | `#start` hidden and disabled, `#add-cards` takes its place as the primary action. A button that leads nowhere is worse than no button. |
 | Calendar days before the first review | Hairline only at `opacity .4` — see the pattern above |
 | Streak under 7 days | The grace-day notice is hidden. There is no streak worth protecting yet, and reassurance about a rule you have not needed reads as a warning. |
+| Nothing done and nothing due today | The ring is not drawn at all — an empty dial at 0 % is the bleakest possible reading of a day with nothing scheduled. |
 | No card clears the struggling gates | The whole "Vengo fallando" panel is hidden, not shown empty. A heading over an empty list invents a problem out of an absence of evidence. |
+| A skill with no cards | Its meter is transparent at `opacity .4` and its figure reads `—`, not `0 %`. |
 
 ## Rejected defaults
 

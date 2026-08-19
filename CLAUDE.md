@@ -48,8 +48,8 @@ cases checked in seconds.
 | | |
 |---|---|
 | `GET /api/health` | Is Anki answering, is `claude` on PATH |
-| `GET /api/today` | Everything the Today screen needs, in one object |
-| `GET /api/catalog` | Skill → level → decks, with maturity, the level you stand on, the holes and what is next. Feeds Progreso, the five skill screens and Mazos. |
+| `GET /api/today` | Everything Hoy needs, in one object, and everything the Dashboard needs bar the catalogue. `struggling` is the head of the ranking — what Hoy lists — and `struggling_total` how long it really is, which is the figure the Dashboard strip shows: cut to twelve, 12 stuck cards and 40 would read the same. |
+| `GET /api/catalog` | Skill → level → decks, with maturity, the level you stand on, the holes and what is next. Feeds Progreso, the five skill screens, Mazos and the skill meters on Hoy. |
 | `GET /api/stuck` | The full stuck ranking with severity and the minutes it costs |
 | `POST /api/study` | Hands the session to Anki's reviewer. `?deck=` picks one; without it the busiest wins. 409 when nothing is due — including when the named deck has nothing. |
 | `POST /api/add-cards` | Opens Anki's Add dialog |
@@ -98,8 +98,9 @@ flattens the card. Snapshots store the **raw** value so a restore is exact.
 ## The repair flow
 
 `struggling` in `/api/today` ranks cards by failures, time lost and interval
-drops. A card must clear both gates to appear: `MIN_ATTEMPTS` reviews and
-`MIN_FAILURES` failures. Without the failure gate it is really a slowest-cards
+drops — the head of it on Hoy, the whole ranking on `/api/stuck`, and just the
+count on the Dashboard. A card must clear both gates to appear: `MIN_ATTEMPTS`
+reviews and `MIN_FAILURES` failures. Without the failure gate it is really a slowest-cards
 list, and a card you have never got wrong is not one you are stuck on.
 
 `repair.propose()` sends the card plus its review history and asks for a rewrite.
@@ -134,10 +135,29 @@ keeping them apart is what makes Progreso a diagnosis instead of a progress bar.
 
 No framework, no build step, no npm. Save a file, reload the browser.
 
-- **Seven screens, hash routing.** `#/hoy`, `#/progreso`, `#/skill/<skill>`,
-  `#/mazos`, `#/atascos`, `#/ajustes`. Hash and not path: `StaticFiles` is
-  mounted at the root and knows nothing about `/progreso`, so reloading a path
-  route would 404.
+- **Eight screens, hash routing.** `#/hoy`, `#/progreso`, `#/skill/<skill>`,
+  `#/mazos`, `#/atascos`, `#/ajustes`, `#/dashboard`. Hash and not path:
+  `StaticFiles` is mounted at the root and knows nothing about `/progreso`, so
+  reloading a path route would 404.
+- **Hoy and Dashboard are two screens, not one.** Hoy is Pantalla 1 v2 of the
+  wireframe — only what depends on whether you show up today: the headline, the
+  streak, the 30-day calendar, the decks and the cards you keep failing. The
+  Dashboard is Pantalla 1, the panorama, and it is **last in the menu on
+  purpose**: you enter Hoy to start and the Dashboard to look. Merging them was
+  the first attempt and it made a landing screen you had to scan before you
+  could begin.
+- **The Dashboard carries the four sections of the wireframe and no more**:
+  the strip of four figures, Actividad semanal · Repaso de hoy · Progreso por
+  habilidad · Mis mazos. Two deliberate departures, both written into
+  `.interface-design/system.md`: **no Precisión and no Tiempo estudiado** —
+  cumulative metrics, ruled out below — and no search or "+ Nuevo mazo" in the
+  header, because searching is the Mazos screen and creating a deck is a write
+  into Anki that does not exist yet. Its one primary action sits under the
+  ring, where the wireframe puts it.
+- **Its four sections are one grid, not two stacked columns.** `.dash` is a
+  single two-column grid so its rows align; with a column per side each panel
+  started where the one above it ended and "Progreso por habilidad" and "Mis
+  mazos" sat at different heights, which is dizzying to read.
 - `index.html` is a **shell**. Every screen carries its own markup inside its
   module in `static/views/`, and each exports `render(root, params)`.
 - View modules are imported **statically** in `router.js`. They are local files
@@ -299,9 +319,10 @@ The `interface-design` skill is installed in `.claude/skills/`, with
 
 ## Current status
 
-Seven screens navigate: Hoy, Progreso, the five skill libraries, Mazos, Atascos
-and Ajustes. Progreso, the skill screens and Mazos all read `/api/catalog`;
-Atascos reads `/api/stuck`; repair works from both Hoy and Atascos.
+Eight screens navigate: Hoy, Progreso, the five skill libraries, Mazos,
+Atascos, Ajustes and Dashboard. Hoy and the Dashboard read `/api/today`, and
+the Dashboard also reads `/api/catalog`, as Progreso, the skill screens and
+Mazos do; Atascos reads `/api/stuck`; repair works from both Hoy and Atascos.
 
 Not built: card generation (the thing that fills the holes), rename/archive on
 Mazos, writable settings, and the exercise mode.

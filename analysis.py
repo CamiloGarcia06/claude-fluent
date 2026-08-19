@@ -29,6 +29,10 @@ MATURITY_THRESHOLD = 0.60
 SEVERITY_CRITICAL = 0.50
 SEVERITY_HIGH = 0.30
 
+# How many stuck cards the Hoy screen lists. Atascos shows the whole ranking,
+# and the Dashboard shows only how long that ranking is.
+TODAY_STUCK_LIMIT = 12
+
 # A card has to have been seen a few times AND actually failed before it counts
 # as stuck. Ranking on time alone surfaces cards you simply read slowly, which
 # is how "0 fallos de 3" ended up at the top of the list.
@@ -133,7 +137,7 @@ def due_by_deck(deck_counts: list[dict]) -> dict:
     }
 
 
-def struggling(reviews: list[Review], limit: int = 12) -> list[dict]:
+def struggling(reviews: list[Review], limit: int | None = 12) -> list[dict]:
     """Cards ranked by how much trouble they cause.
 
     Three signals combine, because none of them is enough alone: a card can be
@@ -184,18 +188,26 @@ def struggling(reviews: list[Review], limit: int = 12) -> list[dict]:
         })
 
     ranked.sort(key=lambda c: -c["score"])
+    # `limit=None` returns the whole ranking, which is what the counters on the
+    # dashboard need: with the list cut to twelve, "7 atascos" and "12 atascos"
+    # would be the same screen.
     return ranked[:limit]
 
 
 def summary(reviews: list[Review], deck_counts: list[dict], today: date) -> dict:
     """Everything the Today screen needs, in one object."""
     total_seconds = sum(r.duration_ms for r in reviews) / 1000.0
+    # Ranked once and read twice: Hoy paints the head of the list, the Dashboard
+    # counts it. With the list cut to twelve, "7 atascos" and "40 atascos" would
+    # be the same figure.
+    stuck = struggling(reviews, limit=None)
     return {
         "date": today.isoformat(),
         "streak": streak(reviews, today),
         "due": due_by_deck(deck_counts),
         "calendar": calendar(reviews, today),
-        "struggling": struggling(reviews),
+        "struggling": stuck[:TODAY_STUCK_LIMIT],
+        "struggling_total": len(stuck),
         "window": {
             "days": CALENDAR_DAYS,
             "reviews": len(reviews),

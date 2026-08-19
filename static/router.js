@@ -14,6 +14,7 @@ import * as skill from "/views/skill.js";
 import * as decks from "/views/decks.js";
 import * as stuck from "/views/stuck.js";
 import * as settings from "/views/settings.js";
+import * as dashboard from "/views/dashboard.js";
 
 const ROUTES = {
   hoy: today,
@@ -22,6 +23,7 @@ const ROUTES = {
   mazos: decks,
   atascos: stuck,
   ajustes: settings,
+  dashboard,
 };
 
 const DEFAULT_ROUTE = "hoy";
@@ -42,8 +44,10 @@ function markActive(name, params) {
 
 // The chips are a summary, so they never get in the way: never awaited, and if
 // the catalogue cannot be read the sidebar simply carries no levels while the
-// screen below says why. On Hoy that means one extra request the screen itself
-// does not need, which is the price of reading your level without entering.
+// screen below says why. On the screens that read the catalogue — Progreso,
+// las skills, Mazos y el Dashboard — es la misma promesa a través de
+// ui.catalog(); sólo en Hoy es una petición que la pantalla no necesita, que
+// es el precio de leer tu nivel sin entrar.
 async function fillChips() {
   let data;
   try {
