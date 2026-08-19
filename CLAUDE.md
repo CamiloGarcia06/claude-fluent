@@ -31,7 +31,12 @@ looks normal while it lies to you.
 | `llm.py` | `claude -p` wrapper. Checks `is_error` on stdout, never uses `--bare`. |
 | `seed_cards.py` | Development fixture, not part of the app. Creates deliberately defective cards in `claude-fluent-test`. |
 | `spike_anki.py`, `spike_claude.py` | Phase 0 connection probes. Kept as the record that the architecture works. |
-| `static/` | Plain HTML/CSS/JS. No framework, no build step. |
+| `static/index.html` | A shell: left sidebar, `#offline`, `<main id="view">`. No screen markup. |
+| `static/app.js` | Entry point, three lines. Everything is in `router.js`. |
+| `static/router.js` | Hash routing. Mounts a view into `#view` and marks the nav. |
+| `static/ui.js` | Shared helpers: `$`, `el`, formatting, rows, `getJSON`, the catalogue cache. |
+| `static/repair.js` | The repair panel, shared by Hoy and Atascos. |
+| `static/views/*.js` | One module per screen, each exporting `render(root, params)` and carrying its own markup. |
 
 **`app.py` fetches, `analysis.py` computes.** Never put an AnkiConnect call
 inside `analysis.py` — that separation is the only reason the analysis can be
@@ -44,7 +49,9 @@ cases checked in seconds.
 |---|---|
 | `GET /api/health` | Is Anki answering, is `claude` on PATH |
 | `GET /api/today` | Everything the Today screen needs, in one object |
-| `POST /api/study` | Hands the session to Anki's reviewer on the deck with work. 409 when nothing is due. |
+| `GET /api/catalog` | Skill → level → decks, with maturity, the level you stand on, the holes and what is next. Feeds Progreso, the five skill screens and Mazos. |
+| `GET /api/stuck` | The full stuck ranking with severity and the minutes it costs |
+| `POST /api/study` | Hands the session to Anki's reviewer. `?deck=` picks one; without it the busiest wins. 409 when nothing is due — including when the named deck has nothing. |
 | `POST /api/add-cards` | Opens Anki's Add dialog |
 | `POST /api/repair/{note_id}` | Asks the model for a better card. **Writes nothing.** |
 | `POST /api/apply/{note_id}` | Snapshots, then writes the approved fields |
@@ -100,10 +107,49 @@ Field names come back from a language model, so they are untrusted: anything the
 note does not have is dropped and reported in `rejected_fields`, and `/api/apply`
 validates them again before writing. Expect 8–15 s per call.
 
+## The deck naming convention
+
+Everything about levels rests on one rule: a deck is named
+**`Skill::Level::Topic`** — `Grammar::B1::Phrasal verbs`. Skills are the five in
+`analysis.SKILLS`, levels the five in `analysis.LEVELS`; matching is
+case-insensitive and the canonical spelling is what comes back.
+
+**The name is the whole database.** The classification is derived on every read
+and nothing is stored, so renaming a deck in Anki reclassifies it and there is
+no mapping on disk that can drift. Renaming is the editing interface.
+
+Decks that do not follow it land under "sin clasificar" rather than being
+dropped — a deck the app cannot read is exactly the thing worth seeing. The one
+exception is an empty parent that only holds subdecks: `Grammar` above
+`Grammar::B1::…` is scaffolding, not a deck that failed to classify.
+
+A level is **held** at `analysis.MATURITY_THRESHOLD` (60 %) of its cards mature,
+where mature is Anki's own three weeks. The level you are standing on is the
+first, walking A1 → C1, that is not held; an empty level is not held either, so
+the walk stops there. A level with no cards is a **hole**, and holes are what to
+generate next — a missing level and a weak level need different actions, and
+keeping them apart is what makes Progreso a diagnosis instead of a progress bar.
+
 ## Front end
 
 No framework, no build step, no npm. Save a file, reload the browser.
 
+- **Seven screens, hash routing.** `#/hoy`, `#/progreso`, `#/skill/<skill>`,
+  `#/mazos`, `#/atascos`, `#/ajustes`. Hash and not path: `StaticFiles` is
+  mounted at the root and knows nothing about `/progreso`, so reloading a path
+  route would 404.
+- `index.html` is a **shell**. Every screen carries its own markup inside its
+  module in `static/views/`, and each exports `render(root, params)`.
+- View modules are imported **statically** in `router.js`. They are local files
+  and a dynamic import that fails leaves a blank screen with nothing to fall
+  back on; that trade only makes sense for anime.js, where the page is already
+  usable without it.
+- `/api/catalog` is fetched **once per navigation** and shared by the skill bar
+  and the screen (`ui.catalog()`); the router drops the cache on the way in,
+  which is what keeps it from going stale.
+- Anything thrown as `ui.ApiError` reaches the router, which paints the offline
+  banner and leaves the view empty. Views do not each write their own "Anki no
+  responde".
 - Served from the **root**, not `/static`: the mount points at `static/`, so the
   page links `/styles.css`, not `/static/styles.css`.
 - A middleware sets `Cache-Control: no-cache` outside `/api/`. StaticFiles sends
@@ -200,8 +246,9 @@ works:
 ## Design
 
 Wireframes live in `docs/wireframes.excalidraw`. It holds two generations: the
-early Dashboard screens carry cumulative metrics and an account/plan sidebar,
-both of which the closed decisions rule out. **The "v2" screens are the target**
+early Dashboard screens carry cumulative metrics and an account/plan sidebar.
+The cumulative metrics stay ruled out; the sidebar came back, but as navigation
+only — never an account or a plan. **The "v2" screens are the target**
 — "Hoy" and the session cards with their Listening / Speaking / Reading /
 Writing variants.
 
@@ -209,7 +256,9 @@ Writing variants.
 touching `static/` and hold to its values instead of reinventing them.**
 Direction is "la ficha de cartón": cool card stock, graphite, borders-only
 depth, 4px base. One accent, `--present` `#2a5580`, the blue-black of writing
-ink — on the primary button and today's calendar mark, nowhere else. **Red is
+ink. It means exactly two things and nothing else: **the primary action**, and
+**here and now** — today's calendar mark, the level you are standing on, the
+sidebar item you are on. Nowhere else. **Red is
 only ever a failure of the system**, never an action and never a state of the
 person: a day not studied is unmarked paper, not a hole, and a stuck card gets
 no colour at all.
@@ -222,12 +271,30 @@ The `interface-design` skill is installed in `.claude/skills/`, with
 - `spike_anki.py` still reads `decks[0]`, which is `Default` and always empty.
   The app itself no longer makes that mistake; the spike was left as written.
 - `data/state.json` does not exist yet, so `/api/health` reports
-  `last_sync: null` unconditionally.
-- The deck and settings screens in the wireframes are not built.
+  `last_sync: null` unconditionally and the dials on Ajustes are read-only.
+- **The collection follows none of the convention.** It holds
+  `claude-fluent-test`, `Default` and `mindtech_odoo_interview`, so every level
+  of every skill is a hole and Progreso renders empty rails. That is the
+  diagnosis working, not a bug — but it means generation is what makes these
+  screens say anything.
+- Mazos lists and searches but cannot rename or archive yet.
+- **AnkiConnect has no `renameDeck`** — verified against the 121 actions of
+  `apiReflect`. Renaming is `createDeck` + `changeDeck` + `deleteDecks`, three
+  chained destructive writes, and it needs a third kind of record next to the
+  snapshot and the creation record: a move record with the card → deck map.
+- **`WRITE_ACTIONS` has a hole.** None of the note-type actions are in it —
+  `createModel`, `updateModelTemplates`, `updateModelStyling`, `modelFieldAdd`,
+  `modelTemplateAdd`, and the deck-config ones. They reach `call()` without a
+  snapshot. Nothing writes note types yet; the card templates will be the first
+  thing that does, and the list has to grow **before** that, not after.
 
 ## Current status
 
-Today screen and card repair work end to end against the real collection.
-Card generation (phase 3) is the next thing not built.
+Seven screens navigate: Hoy, Progreso, the five skill libraries, Mazos, Atascos
+and Ajustes. Progreso, the skill screens and Mazos all read `/api/catalog`;
+Atascos reads `/api/stuck`; repair works from both Hoy and Atascos.
+
+Not built: card generation (the thing that fills the holes), rename/archive on
+Mazos, writable settings, and the exercise mode.
 
 (Update this section after each phase.)

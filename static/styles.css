@@ -1,8 +1,10 @@
-/* claude-fluent — Today screen.
-   Direction: "la ficha de cartón". Cool card stock, graphite, and the single
-   red margin rule of an index card. Depth is borders-only: paper does not
-   levitate. Red means the present — today's mark and the button that starts
-   it. Nothing else is ever red, least of all the cards you keep failing. */
+/* claude-fluent.
+   Direction: "la ficha de cartón". Cool card stock, graphite, borders-only
+   depth: paper does not levitate. One accent, --present #2a5580, the blue-black
+   of writing ink — on the primary button, today's calendar mark and the level
+   you are standing on, nowhere else. Red is only ever a failure of the system,
+   never an action and never a state of the person: a day not studied is
+   unmarked paper, and a stuck card gets no colour at all. */
 
 :root {
   /* Paper and ink */
@@ -91,31 +93,114 @@ body {
 a { color: inherit; }
 :focus-visible { outline: 2px solid var(--present); outline-offset: 2px; border-radius: 2px; }
 
-/* ── Top bar ──────────────────────────────────────────────────────────
-   Secondary by instruction: you did not come here to navigate. */
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s4);
-  padding: var(--s3) var(--s5);
-  border-bottom: 1px solid var(--rule-faint);
+/* ── Sidebar ──────────────────────────────────────────────────────────
+   Secondary by instruction: you did not come here to navigate. It went to
+   the left once there were ten destinations — with two it was a top bar and
+   a column would have been furniture around an empty room.
+
+   Depth stays borders-only: one hairline rule down the right edge, the same
+   printed rule as everything else. No fill, no shadow, no second surface. */
+.shell {
+  display: grid;
+  grid-template-columns: 15rem 1fr;
+  min-height: 100vh;
 }
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  max-height: 100vh;
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: var(--s5);
+  padding: var(--s5) var(--s3);
+  border-right: 1px solid var(--rule-faint);
+}
+
+.content { min-width: 0; }   /* without it the grid column refuses to shrink */
+
 .brand {
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--ink-2);
+  text-decoration: none;
+  padding: 0 var(--s3);
 }
-.topbar nav { display: flex; gap: var(--s1); }
-.topbar nav a {
-  font-size: 13px;
+
+#nav, #skillbar { display: grid; gap: 1px; }
+
+#nav a,
+#skillbar a {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s2);
+  font-size: 14px;
   color: var(--ink-3);
   text-decoration: none;
   padding: var(--s2) var(--s3);   /* hit area, not decoration */
   border-radius: var(--r-md);
 }
-.topbar nav a:hover { color: var(--ink); background: var(--paper-inset); }
+#nav a:hover,
+#skillbar a:hover { color: var(--ink); background: var(--paper-inset); }
+
+/* Where you are, marked the way "today" is marked on the calendar and the
+   level you stand on is marked on the rail: a rule of writing ink. The accent
+   means one of two things everywhere in this app — the primary action, or
+   here and now. --paper-inset alone would not carry it: it sits two steps
+   from --paper and reads as nothing at all. */
+#nav a[data-active="true"],
+#skillbar a[data-active="true"] {
+  color: var(--ink);
+  background: var(--paper-inset);
+  box-shadow: inset 2px 0 0 var(--present);
+}
+
+.nav-section { display: grid; gap: var(--s2); }
+.nav-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  padding: 0 var(--s3);
+}
+
+.chip-level {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.10em;
+  color: var(--ink-4);
+}
+#skillbar a[data-active="true"] .chip-level { color: var(--present); }
+
+/* Below the breakpoint the column becomes a bar again: a 15rem sidebar on a
+   phone is most of the screen. */
+@media (max-width: 880px) {
+  .shell { grid-template-columns: 1fr; }
+  .sidebar {
+    position: static;
+    max-height: none;
+    gap: var(--s3);
+    padding: var(--s3) var(--s4);
+    border-right: 0;
+    border-bottom: 1px solid var(--rule-faint);
+  }
+  #nav, #skillbar {
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
+    gap: var(--s1);
+    overflow-x: auto;
+  }
+  #nav a[data-active="true"],
+  #skillbar a[data-active="true"] { box-shadow: inset 0 -2px 0 var(--present); }
+  .nav-section { gap: var(--s1); }
+}
 
 main {
   max-width: 1080px;
@@ -460,6 +545,143 @@ button:disabled { opacity: 0.45; cursor: default; }
   font-size: 13px;
   color: var(--ink-4);
 }
+
+/* ── The rail — A1 to C1 ──────────────────────────────────────────────
+   The calendar's vocabulary, laid on its side. A level with no cards is
+   unmarked paper, exactly like a day you did not study: no fill, no border,
+   only the faintest rule. Ink marks what you hold. The level you are
+   standing on takes the same accent bar today's cell takes, so "here" means
+   the same thing on both screens. */
+.rails { display: grid; gap: var(--s1); margin-top: var(--s4); }
+
+.rail-row {
+  display: grid;
+  grid-template-columns: 13rem 1fr 4rem;
+  align-items: center;
+  gap: var(--s5);
+  padding: var(--s3) var(--s2);
+  border-bottom: 1px solid var(--rule-faint);
+  text-decoration: none;
+  border-radius: var(--r-md);
+}
+.rail-row:last-child { border-bottom: 0; }
+.rail-row:hover { background: var(--paper-inset); }
+
+.rail-name { display: flex; align-items: baseline; gap: var(--s2); min-width: 0; }
+.rail-skill { font-size: 15px; color: var(--ink); }
+.rail-chip {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.10em;
+  color: var(--ink-4);
+  white-space: nowrap;
+}
+h2 .rail-chip { margin-left: var(--s2); }
+
+.rail { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--s2); }
+.rail-solo { display: block; flex: 1; min-width: 14rem; }
+
+.seg-wrap { display: grid; gap: var(--s2); min-width: 0; }
+.seg {
+  position: relative;
+  height: 8px;
+  border-radius: var(--r-sm);
+  background: var(--paper-inset);
+  box-shadow: inset 0 0 0 1px var(--rule-faint);
+}
+.seg-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-sm);
+  background: var(--ink);
+}
+/* A level you never started is not a level you failed. */
+.seg-wrap[data-state="empty"] .seg { background: transparent; opacity: 0.4; }
+
+.seg-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.10em;
+  color: var(--ink-4);
+  text-align: center;
+}
+.seg-wrap[data-current="true"] .seg-label { color: var(--present); }
+.seg-wrap[data-current="true"] .seg::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--present);
+}
+
+@media (max-width: 880px) {
+  .rail-row { grid-template-columns: 1fr auto; gap: var(--s3); }
+  .rail { grid-column: 1 / -1; }
+}
+
+/* ── Search ───────────────────────────────────────────────────────────── */
+.search {
+  font: 400 15px/1 var(--font);
+  color: var(--ink);
+  background: var(--paper-inset);
+  border: 1px solid var(--rule-faint);
+  border-radius: var(--r-md);
+  padding: var(--s3);
+  min-height: 40px;
+  width: 100%;
+  max-width: 32ch;
+}
+.search::placeholder { color: var(--ink-4); }
+
+/* ── Severity and classification labels ───────────────────────────────
+   Mono, muted, no colour. The order of the list already says which card
+   hurts most, and colouring a card you keep failing is a reproach. */
+.tag {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  white-space: nowrap;
+}
+
+.filters { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s4); }
+.chip {
+  font: 500 12px/1 var(--font);
+  color: var(--ink-3);
+  background: transparent;
+  border: 1px solid var(--rule-faint);
+  border-radius: var(--r-md);
+  padding: var(--s2) var(--s3);
+  cursor: pointer;
+}
+.chip:hover { color: var(--ink); background: var(--paper-inset); }
+.chip[data-active="true"] {
+  color: var(--ink);
+  background: var(--paper-inset);
+  border-color: var(--rule);
+}
+
+/* ── Rows that carry more than a name ─────────────────────────────────── */
+.rows li .name a,
+.rows li a.name { color: var(--ink); text-decoration: none; }
+.rows li a.name:hover { text-decoration: underline; }
+
+.stuck-row .name { display: grid; gap: var(--s1); }
+.stuck-front { font-size: 15px; color: var(--ink); overflow-wrap: anywhere; }
+
+.dial .name { display: grid; gap: var(--s1); color: var(--ink); }
+.dial-note { font-size: 13px; color: var(--ink-3); }
+
+/* The one place a row may go red: a connection that is down is a failure of
+   the system, which is exactly what --alarm is reserved for. */
+.count[data-ok="false"] { color: var(--alarm); }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }

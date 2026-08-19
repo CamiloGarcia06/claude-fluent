@@ -104,6 +104,25 @@ flex, space-between, baseline · 8px bottom padding · 1px `--rule` bottom ·
 h2 16/600 `--ink` · action link 12px `--ink-3`
 Panels themselves carry **no border and no background**.
 
+### Sidebar
+`15rem` column · 1px `--rule-faint` right edge, no fill and no shadow ·
+sticky, `max-height: 100vh`, scrolls on its own ·
+items 14px `--ink-3`, `8px 12px`, 6px radius, 1px apart ·
+hover `--ink` on `--paper-inset` ·
+active `--ink` on `--paper-inset` + `inset 2px 0 0 --present` ·
+section label mono 11/500 uppercase `.10em` `--ink-4` ·
+level chip mono 11/500 `--ink-4`, `--present` when active
+Under 880px it becomes a horizontal bar and the active rule moves to the
+bottom edge.
+
+### Rail segment (A1–C1)
+8px tall track · 3px radius · `--paper-inset` + `inset 0 0 0 1px --rule-faint` ·
+fill `--ink` at the maturity percentage · level letter mono 11 `--ink-4` below
+- empty level — transparent, hairline only, `opacity .4`. **The calendar's
+  "before you started" treatment.** A level you never began is not one you failed.
+- current level — letter turns `--present`, plus a 2px `--present` bar 4px
+  below the track. The same mark today's cell carries.
+
 ### Streak pill
 mono 13/500 tabular · 8px 12px · 6px radius · `--paper-inset` on 1px `--rule-faint`
 
@@ -179,6 +198,11 @@ easy case; these are the ones that decide whether it feels encouraging.
 
 | Decision | Rationale | Date |
 |---|---|---|
+| ~~No sidebar~~ → **left sidebar** | Reversed, because the premise changed rather than the taste. The sidebar was cut when navigation was two links and a column would have been furniture around an empty room. With Progreso, five skill libraries, Mazos, Atascos and Ajustes it is ten destinations, and ten links across one bar is a navigation product. Navigation only: no account, no plan, no brand mark beyond the wordmark. | 2026-08-18 |
+| The accent means two things: the primary action, and here-and-now | It was on `#start` and today's calendar mark. Adding the current rail segment and the current sidebar item does not spend a second accent — it says the same word in three places. The rule to hold is the *meaning*, not the count of usages: nothing else may take `--present`. | 2026-08-18 |
+| The active sidebar item is a 2px inset rule, not a fill | `--paper-inset` on `--paper` is two steps of lightness and reads as nothing. A rule of ink down the left edge is the index card's own margin rule, and it is the same mark today's cell carries under it. | 2026-08-18 |
+| A level with no cards is drawn like a day not studied | Same emotional premise, same treatment: transparent, hairline only, `opacity .4`. A level you never started is not a level you failed, exactly as a day before you began is not a day you missed. | 2026-08-18 |
+| Severity on the stuck cards is a mono label, never a colour | Where every default design reaches for red/amber/green. The list is already ordered by time lost, so colour adds no information and does add a verdict. | 2026-08-18 |
 | A day not studied is paper, not a hole | The whole emotional premise. Empty cells carry no border and no fill, so absence never accuses. This is what rules out the contribution-graph pattern. | 2026-08-18 |
 | ~~Red means the present~~ → **the accent is writing ink, `#2a5580`** | Reversed. Two problems with the red. Red reads as danger or error in every interface anyone has used, and `Empezar` is the most positive action on the screen. And `--present` `#b23a2e` sat ten degrees of hue from `--alarm` `#a8342a`, so the action colour and the error colour were nearly indistinguishable — the accent was competing with the one thing that must never be missed. Blue-black ink is just as native to the index-card world and carries none of that. **Red is now reserved entirely for `--alarm`.** | 2026-08-18 |
 | One accent, on `#start`, `#add-cards` and today's calendar mark | Still one accent used with intention — only the hue changed. | 2026-08-18 |

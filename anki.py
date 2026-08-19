@@ -49,6 +49,11 @@ def snapshot_evidence() -> str | None:
     """The snapshot authorising the current write, if any."""
     return _write_guard.get()
 
+# Anki's own definition of a mature card: an interval of three weeks or more.
+# Kept in seconds because card intervals, like revlog ones, carry their unit
+# in their sign.
+MATURE_SECONDS = 21 * 86400
+
 # Review buttons, as stored in the revlog.
 AGAIN, HARD, GOOD, EASY = 1, 2, 3, 4
 
@@ -155,6 +160,31 @@ def due_counts() -> list[dict]:
             "total": s.get("total_in_deck", 0),
         })
     return out
+
+
+def deck_card_stats() -> list[dict]:
+    """Per deck: how many cards it has, how many have been seen, how many are
+    mature. Empty decks included.
+
+    The cards come back in one cardsInfo pass over the whole collection and are
+    grouped by their own `deckName`. Asking deck by deck would be wrong: a
+    findCards query for a parent matches its subdecks too, so every card would
+    be counted again in each of its ancestors.
+    """
+    counts = {name: {"total": 0, "seen": 0, "mature": 0} for name in decks()}
+
+    card_ids = call("findCards", query="deck:*")
+    for card in call("cardsInfo", cards=card_ids) if card_ids else []:
+        deck = counts.setdefault(
+            card["deckName"], {"total": 0, "seen": 0, "mature": 0}
+        )
+        deck["total"] += 1
+        if card.get("reps", 0) > 0:
+            deck["seen"] += 1
+        if interval_to_seconds(card.get("interval", 0)) >= MATURE_SECONDS:
+            deck["mature"] += 1
+
+    return [{"deck": name, **counts[name]} for name in sorted(counts)]
 
 
 def reviews_since(timestamp_ms: int) -> list[Review]:

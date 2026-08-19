@@ -13,6 +13,9 @@ import snapshot
 
 app = FastAPI(title="claude-fluent")
 
+# The Atascos screen is the whole ranking, not the head of it that Today shows.
+STUCK_LIMIT = 50
+
 
 @app.middleware("http")
 async def no_stale_assets(request, call_next):
@@ -66,17 +69,67 @@ def today() -> dict:
     return summary
 
 
+@app.get("/api/catalog")
+def catalog() -> dict:
+    """The deck catalogue, skill -> level -> decks.
+
+    The classification comes from the deck name every time it is read; there is
+    nothing stored to keep in sync. Renaming a deck in Anki is the whole
+    editing interface.
+    """
+    if not anki.is_alive():
+        raise HTTPException(503, "AnkiConnect is not answering — is Anki running?")
+
+    return analysis.catalog(anki.deck_card_stats(), anki.due_counts())
+
+
+@app.get("/api/stuck")
+def stuck() -> dict:
+    """The full list of cards you keep failing, with severity and the minutes
+    they cost. The Today screen shows the head of this same ranking."""
+    if not anki.is_alive():
+        raise HTTPException(503, "AnkiConnect is not answering — is Anki running?")
+
+    reviews = anki.reviews_since(_window_start_ms())
+    cards = analysis.struggling(reviews, limit=STUCK_LIMIT)
+
+    # analysis.py stays pure, so the card text is looked up here and merged in.
+    details = anki.card_summaries([c["card_id"] for c in cards])
+    for card in cards:
+        found = details.get(card["card_id"], {})
+        card["front"] = found.get("front", "")
+        card["note_id"] = found.get("note_id")
+        card["severity"] = analysis.severity(card)
+
+    total_cards = sum(d["total"] for d in anki.deck_card_stats())
+    total_seconds = sum(r.duration_ms for r in reviews) / 1000.0
+    return {
+        "cards": cards,
+        "impact": analysis.impact(cards, total_cards, total_seconds),
+        "window": {"days": analysis.CALENDAR_DAYS, "reviews": len(reviews)},
+    }
+
+
 @app.post("/api/study")
-def study() -> dict:
+def study(deck: str | None = None) -> dict:
     """Hand the session over to Anki, on the deck that actually has work.
 
-    Reviewing is Anki's job; this app only decides where to start.
+    Reviewing is Anki's job; this app only decides where to start. With no
+    `deck` the busiest one wins; the Progreso screen passes the one it named,
+    so the button does what the sentence above it just promised.
     """
     if not anki.is_alive():
         raise HTTPException(503, "AnkiConnect is not answering — is Anki running?")
 
     due = analysis.due_by_deck(anki.due_counts())
-    target = next((d for d in due["decks"] if d["due"] > 0), None)
+    if deck is None:
+        target = next((d for d in due["decks"] if d["due"] > 0), None)
+    else:
+        # Never forward an unchecked name to guiDeckReview: a deck that does
+        # not exist opens the reviewer on nothing and looks like a hang.
+        target = next(
+            (d for d in due["decks"] if d["deck"] == deck and d["due"] > 0), None
+        )
     if target is None:
         raise HTTPException(409, "No hay tarjetas pendientes hoy.")
 
