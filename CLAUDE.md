@@ -502,7 +502,11 @@ executed or rendered here. What is worth checking before claiming something
 works:
 
 - Python — `python -c "import ast; ast.parse(open('x.py').read())"`, then import
-  every module.
+  every module. Neither catches a **name that no longer exists**: `TERMS_PROMPT`
+  was deleted by an edit to the module's prompts and "Proponer términos" was a
+  500 on every call — parsing fine, importing fine, dead at the first call. An
+  AST sweep for uppercase names used but never assigned at module level finds
+  it in a second, and there is no linter on this machine to do it for you.
 - Pure functions — call `analysis.streak` / `calendar` / `struggling` with
   synthetic `Review` rows. This is where real bugs have been caught.
 - Front end — cross-check that every `$("id")` in `app.js` exists in

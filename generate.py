@@ -425,6 +425,34 @@ def _focus_block(focus: dict | None, have: list[str]) -> str:
             **focus, have="\n".join(f"  {front}" for front in have))
     return FOCUS_HOLE.format(**focus)
 
+TERMS_PROMPT = """A Spanish speaker is learning English with Anki. Read the
+state of their collection and say what is worth making cards for next.
+{topic}{focus}
+
+Cards they keep failing (ranked by how much trouble they cause):
+{stuck}
+
+Levels of their collection, A1 to C1. "hole" means there is no deck at all at
+that level, which is a different problem from a weak one:
+{levels}
+
+Rules:
+
+- Return at most {max_terms} terms, fewest first if there is little to go on.
+- A term is a word, a phrasal verb, a collocation or a grammar point — the
+  thing a card would teach. Not a topic like "vocabulary" or "verb tenses".
+- Prefer what the failures point at. If they keep failing `to put up with`,
+  the neighbours of that pattern are what they need, not an unrelated word.
+- A level with no deck at all is the strongest signal there is: nothing to
+  review means nothing will ever come up for review.
+- Never repeat a term that is already on a card above.
+- `reason`: one short sentence **in Spanish**, addressed to the student,
+  saying why this one. Concrete, never a scolding.
+
+If there is genuinely nothing to go on — no failures and no holes — return an
+empty list rather than inventing work."""
+
+
 
 def propose_terms(stuck: list[dict], catalog: dict,
                   focus: dict | None = None, topic: str = "",
