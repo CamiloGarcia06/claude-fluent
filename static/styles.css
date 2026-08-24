@@ -380,6 +380,77 @@ h1 {
   .dash { grid-template-columns: 1fr; gap: var(--s6); }
 }
 
+/* ── La meta de hoy ───────────────────────────────────────────────────
+   Lo que te propusiste, no lo que se acumuló. El atraso va debajo, en gris y
+   con su razón: esconderlo sería mentir, ponerlo de titular desanima — y
+   desanimar es lo único que este app no puede permitirse. */
+.goal {
+  display: grid;
+  gap: var(--s2);
+  margin-bottom: var(--s7);
+}
+.goal-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+  flex-wrap: wrap;
+}
+.goal-count {
+  font-family: var(--mono);
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.goal-note { font-size: 13px; color: var(--ink-3); }
+
+/* El único control que escribe algo fuera de Anki. */
+.goal-set {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex-wrap: wrap;
+  margin-top: var(--s4);
+}
+.goal-input {
+  font: 600 22px/1 var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  background: var(--paper-inset);
+  border: 1px solid var(--rule-faint);
+  border-radius: var(--r-rough);
+  padding: var(--s2) var(--s3);
+  width: 6rem;
+}
+.goal-unit { font-size: 13px; color: var(--ink-3); }
+
+/* ── El elector de temas ──────────────────────────────────────────────
+   Un tema es un mazo, así que elegir "Phrasal verbs" y abrir ese mazo son la
+   misma cosa. Fichas y no una lista: son pocas y se eligen de un vistazo. */
+.picker { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s4); }
+.pick {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  font: 400 15px/1 var(--font);
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--rule-faint);
+  border-radius: var(--r-rough);
+  padding: var(--s3);
+  cursor: pointer;
+}
+.pick:nth-child(even) { border-radius: var(--r-rough-alt); }
+.pick:hover { background: var(--paper-inset); border-color: var(--rule); }
+.pick:active { transform: scale(0.985); }
+.pick-count {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+
 /* ── Columns ──────────────────────────────────────────────────────────── */
 .columns {
   display: grid;
@@ -1173,6 +1244,76 @@ h2 .rail-chip { margin-left: var(--s2); }
 /* The one place a row may go red: a connection that is down is a failure of
    the system, which is exactly what --alarm is reserved for. */
 .count[data-ok="false"] { color: var(--alarm); }
+
+/* ── El temario de un nivel ────────────────────────────────────────────
+   La lista responde una pregunta distinta de la barra de madurez, así que se
+   lee distinto: la tinta marca lo que ya cubrís, y un punto sin cubrir es
+   papel sin marcar — igual que un día sin estudiar en el calendario. Ni rojo
+   ni advertencia: no cubrir algo todavía no es un fallo, es lo que sigue. */
+.panel-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+.panel-meta .sub { margin: 0; }
+
+.syllabus-open { padding: var(--s1) var(--s2); font-size: 12px; }
+
+.syllabus { margin-top: var(--s4); border-top: 1px solid var(--rule-faint); }
+
+.syllabus-note {
+  margin: var(--s3) 0 0;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+/* El cuadradito es el mismo gesto que el calendario y el riel: relleno para
+   lo que tenés, contorno tenue para lo que falta. */
+.point .name { display: grid; gap: var(--s1); }
+
+.point {
+  align-items: start;
+  gap: var(--s3);
+}
+
+.point .point-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  font-size: 15px;
+  color: var(--ink-4);
+}
+.point[data-covered="true"] .point-title { color: var(--ink); }
+
+.point .point-title::before {
+  content: "";
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--rule);
+  background: transparent;
+}
+.point[data-covered="true"] .point-title::before {
+  background: var(--ink-2);
+  border-color: var(--ink-2);
+}
+
+.point-en {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-4);
+}
+
+.point-note {
+  font-size: 13px;
+  color: var(--ink-3);
+  padding-left: calc(9px + var(--s2) + 2px);
+}
+
+.point a.count { color: var(--ink-3); text-decoration: none; }
+.point a.count:hover { color: var(--ink); text-decoration: underline; }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }

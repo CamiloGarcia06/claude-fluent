@@ -28,6 +28,25 @@ const MARKUP = `
     </div>
   </section>
 
+  <!-- La meta, no el atraso. 271 pendientes es una importación de mil
+       tarjetas, no una deuda que contrajiste: puesta de titular sólo
+       desanima, y desanimar es lo único que este app no puede permitirse. -->
+  <section class="goal">
+    <div class="goal-head">
+      <span class="goal-count" id="goal-count"></span>
+      <span class="goal-note" id="goal-note"></span>
+    </div>
+    <span class="meter"><span class="meter-fill" id="goal-fill"></span></span>
+  </section>
+
+  <section class="panel" id="picker-panel" hidden>
+    <div class="panel-head">
+      <h2>¿Con qué empezás?</h2>
+      <span class="sub">un tema es un mazo</span>
+    </div>
+    <div id="picker" class="picker"></div>
+  </section>
+
   <div class="columns">
 
     <div class="col">
@@ -70,9 +89,21 @@ function renderHero(data) {
   $("date").textContent = formatLongDate(data.date);
 
   const due = data.due.total;
-  $("due-headline").textContent = due
-    ? `${plural(due, "tarjeta te espera", "tarjetas te esperan")} hoy`
-    : "Hoy no te espera ninguna tarjeta";
+  const goal = data.goal;
+  const done = data.done.cards;
+  const left = Math.max(0, goal - done);
+
+  // El titular es la meta. Con el atraso arriba, la frase de la pantalla era
+  // "271 tarjetas te esperan", que no es una invitación sino una factura.
+  if (!due && !done) {
+    $("due-headline").textContent = "Hoy no te espera ninguna tarjeta";
+  } else if (left === 0) {
+    $("due-headline").textContent = `Listo: ${plural(done, "tarjeta", "tarjetas")} hoy`;
+  } else if (done === 0) {
+    $("due-headline").textContent = `Tus ${goal} de hoy te esperan`;
+  } else {
+    $("due-headline").textContent = `Te ${plural(left, "falta", "faltan")} para tus ${goal} de hoy`;
+  }
 
   // A button that leads nowhere is worse than no button: with nothing due,
   // "Empezar" would hand Anki an empty session, so adding cards takes the
@@ -90,6 +121,47 @@ function renderHero(data) {
     $("grace").textContent = data.streak.grace_left_this_month
       ? `Te queda ${plural(data.streak.grace_left_this_month, "día", "días")} de gracia este mes: faltar una vez no borra la racha.`
       : "Ya usaste tu día de gracia de este mes.";
+  }
+}
+
+function renderGoal(data) {
+  const goal = data.goal;
+  const done = data.done.cards;
+  const share = goal ? Math.min(1, done / goal) : 0;
+
+  $("goal-count").textContent = `${done} de ${goal}`;
+  $("goal-fill").style.width = `${Math.round(share * 100)}%`;
+
+  // El atraso se dice, en voz baja y con su razón. Esconderlo sería mentir;
+  // ponerlo de titular fue el error que esto corrige.
+  const due = data.due.total;
+  $("goal-note").textContent = due
+    ? `${plural(due, "pendiente acumulada", "pendientes acumuladas")} · la meta es lo de hoy`
+    : "sin pendientes";
+}
+
+// Un tema es un mazo: la convención Skill::Level::Topic hace que elegir
+// "Phrasal verbs" y abrir ese mazo sean la misma cosa. Anki no deja armar una
+// sesión de varios mazos sin un mazo filtrado, y AnkiConnect no puede crearlos
+// — así que se elige uno, que además es como se estudia de verdad.
+const topicOf = (deck) => deck.split("::").pop();
+
+function renderPicker(data) {
+  const decks = data.due.decks.filter((d) => d.due > 0);
+  $("picker-panel").hidden = decks.length === 0;
+  if (!decks.length) return;
+
+  const box = $("picker");
+  box.replaceChildren();
+
+  for (const deck of decks) {
+    const chip = el("button", "pick");
+    chip.type = "button";
+    chip.append(el("span", "pick-name", topicOf(deck.deck)),
+                el("span", "pick-count", String(deck.due)));
+    chip.title = deck.deck;
+    chip.addEventListener("click", () => openDeck(deck.deck, chip));
+    box.append(chip);
   }
 }
 
@@ -209,11 +281,20 @@ async function handOverToAnki(path, button, working, done) {
   }
 }
 
+function openDeck(deck, button) {
+  return handOverToAnki(
+    `/api/study?deck=${encodeURIComponent(deck)}`, button, "Abriendo Anki…",
+    (d) => `Anki está en “${d.deck}”, con ${plural(d.due, "tarjeta", "tarjetas")}. ` +
+           `Si la ventana no saltó al frente, cambiá a ella.`);
+}
+
 async function load({ withMotion = true } = {}) {
   const data = await getJSON("/api/today");
   $("today").hidden = false;
 
   renderHero(data);
+  renderGoal(data);
+  renderPicker(data);
   renderCalendar(data.calendar);
   renderDecks(data.due.decks);
   renderStruggling(data.struggling);

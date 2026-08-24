@@ -1,0 +1,139 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    :root {
+      --paper:        #fbfbfa;
+      --paper-inset:  #f4f4f2;
+      --ink:          #1b1d20;
+      --ink-2:        #4a4e54;
+      --ink-3:        #7c8188;
+      --ink-4:        #a8adb4;
+      --rule:         rgba(27, 29, 32, 0.13);
+      --rule-faint:   rgba(27, 29, 32, 0.07);
+      --rule-blue:    rgba(42, 85, 128, 0.30);
+      --present:      #2a5580;
+      --present-ink:  #ffffff;
+      --kraft:        #8a6f4a;
+      --kraft-dim:    rgba(138, 111, 74, 0.10);
+      --alarm:        #a8342a;
+      --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Cantarell, "Noto Sans", sans-serif;
+      --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink-2);
+      font: 400 15px/1.55 var(--font);
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--present); text-decoration: none; }
+    a:hover { color: var(--ink); text-decoration: underline; }
+    ul.rows { list-style: none; margin: 8px 0 0; padding: 0; }
+    ul.rows li {
+      display: flex; align-items: baseline; gap: 12px;
+      padding: 12px 8px; border-bottom: 1px solid var(--rule-faint);
+    }
+    ul.rows li:last-child { border-bottom: 0; }
+    .cal { display: grid; grid-template-columns: repeat(10, 1fr); gap: 8px; margin-top: 16px; }
+    .day { aspect-ratio: 1; border-radius: 3px; background: var(--ink); }
+    .day.off { background: var(--paper-inset); box-shadow: inset 0 0 0 1px var(--rule-faint); }
+    .day.today { position: relative; box-shadow: inset 0 0 0 1px var(--rule-blue); }
+    .day.today::after {
+      content: ""; position: absolute; left: 0; right: 0; bottom: -6px;
+      height: 2px; border-radius: 1px; background: var(--present);
+    }
+  </style>
+</helmet>
+<header style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 24px; border-bottom: 1px solid var(--rule-faint)">
+  <span style="font-size: 13px; font-weight: 600; letter-spacing: 0.02em; color: var(--ink-2)">claude-fluent</span>
+  <nav style="display: flex; gap: 4px">
+    <a href="#" style="font-size: 13px; color: var(--ink-3); text-decoration: none; padding: 8px 12px; border-radius: 6px">Hoy</a>
+    <a href="#" style="font-size: 13px; color: var(--ink); background: var(--paper-inset); text-decoration: none; padding: 8px 12px; border-radius: 6px">Mazos</a>
+    <a href="#" style="font-size: 13px; color: var(--ink-3); text-decoration: none; padding: 8px 12px; border-radius: 6px">Ajustes</a>
+  </nav>
+</header>
+
+<main style="max-width: 1080px; margin: 0 auto; padding: 48px 24px">
+
+  <section style="display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 24px; padding-bottom: 32px; margin-bottom: 32px; border-bottom: 1px solid var(--rule-faint)">
+    <p style="grid-column: 1; margin: 0 0 4px; font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-4)">Colección</p>
+    <h1 style="grid-column: 1; margin: 0; font-size: 34px; font-weight: 600; line-height: 1.15; letter-spacing: -0.022em; color: var(--ink); text-wrap: balance">6 mazos, 48 tarjetas para hoy</h1>
+    <button type="button" style="grid-column: 2; grid-row: 1 / span 2; justify-self: end; font: 600 16px/1 var(--font); color: var(--present-ink); background: var(--present); border: 1px solid var(--present); border-radius: 6px; padding: 16px 32px; min-height: 48px; cursor: pointer">Agregar tarjetas</button>
+  </section>
+
+  <section>
+    <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--rule)">
+      <h2 style="margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.006em; color: var(--ink)">Todos los mazos</h2>
+      
+    </div>
+    <ul class="rows">
+      <li style="align-items: center;">
+        <span style="flex: 1; min-width: 0">
+          <span style="display: block; font-size: 15px; color: var(--ink)">Phrasal verbs</span>
+          <span style="display: block; margin-top: 2px; font-size: 13px; color: var(--ink-3)">24 tarjetas · 12 nuevas · 6 en repaso</span>
+        </span>
+        <span style="font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-3); white-space: nowrap">8 para hoy</span>
+        <button type="button" style="font: 500 13px/1 var(--font); color: var(--ink-2); background: transparent; border: 1px solid var(--rule); border-radius: 6px; padding: 8px 12px; cursor: pointer">Estudiar</button>
+      </li>
+      <li style="align-items: center;">
+        <span style="flex: 1; min-width: 0">
+          <span style="display: block; font-size: 15px; color: var(--ink)">Pronunciación TH / R</span>
+          <span style="display: block; margin-top: 2px; font-size: 13px; color: var(--ink-3)">18 tarjetas · 4 nuevas · 9 en repaso</span>
+        </span>
+        <span style="font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-3); white-space: nowrap">12 para hoy</span>
+        <button type="button" style="font: 500 13px/1 var(--font); color: var(--ink-2); background: transparent; border: 1px solid var(--rule); border-radius: 6px; padding: 8px 12px; cursor: pointer">Estudiar</button>
+      </li>
+      <li style="align-items: center;">
+        <span style="flex: 1; min-width: 0">
+          <span style="display: block; font-size: 15px; color: var(--ink)">6 Minute English</span>
+          <span style="display: block; margin-top: 2px; font-size: 13px; color: var(--ink-3)">31 tarjetas · 0 nuevas · 11 en repaso</span>
+        </span>
+        <span style="font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-3); white-space: nowrap">6 para hoy</span>
+        <button type="button" style="font: 500 13px/1 var(--font); color: var(--ink-2); background: transparent; border: 1px solid var(--rule); border-radius: 6px; padding: 8px 12px; cursor: pointer">Estudiar</button>
+      </li>
+      <li style="align-items: center;">
+        <span style="flex: 1; min-width: 0">
+          <span style="display: block; font-size: 15px; color: var(--ink)">Conectores formales</span>
+          <span style="display: block; margin-top: 2px; font-size: 13px; color: var(--ink-3)">22 tarjetas · 7 nuevas · 5 en repaso</span>
+        </span>
+        <span style="font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-3); white-space: nowrap">9 para hoy</span>
+        <button type="button" style="font: 500 13px/1 var(--font); color: var(--ink-2); background: transparent; border: 1px solid var(--rule); border-radius: 6px; padding: 8px 12px; cursor: pointer">Estudiar</button>
+      </li>
+      <li style="align-items: center;">
+        <span style="flex: 1; min-width: 0">
+          <span style="display: block; font-size: 15px; color: var(--ink)">Noticias en inglés</span>
+          <span style="display: block; margin-top: 2px; font-size: 13px; color: var(--ink-3)">40 tarjetas · 15 nuevas · 8 en repaso</span>
+        </span>
+        <span style="font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-3); white-space: nowrap">13 para hoy</span>
+        <button type="button" style="font: 500 13px/1 var(--font); color: var(--ink-2); background: transparent; border: 1px solid var(--rule); border-radius: 6px; padding: 8px 12px; cursor: pointer">Estudiar</button>
+      </li>
+      <li style="align-items: center; opacity: 0.6;">
+        <span style="flex: 1; min-width: 0">
+          <span style="display: block; font-size: 15px; color: var(--ink)">Irregular verbs</span>
+          <span style="display: block; margin-top: 2px; font-size: 13px; color: var(--ink-3)">36 tarjetas · 0 nuevas · 0 en repaso</span>
+        </span>
+        <span style="font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-3); white-space: nowrap">al día</span>
+        <button type="button" style="font: 500 13px/1 var(--font); color: var(--ink-2); background: transparent; border: 1px solid var(--rule); border-radius: 6px; padding: 8px 12px; cursor: pointer">Estudiar</button>
+      </li>
+    </ul>
+    <p style="margin: 24px 0 0; font-size: 13px; color: var(--ink-4); max-width: 60ch">Crear, renombrar y borrar mazos se hace en Anki. Acá sólo se elige dónde empezar.</p>
+  </section>
+</main>
+</x-dc>
+<script data-dc-script data-props='{"$preview": {"width": 1080, "height": 800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

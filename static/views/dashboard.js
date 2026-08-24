@@ -191,31 +191,31 @@ function ringSvg(share) {
 }
 
 function renderRing(data) {
-  const done = data.calendar[data.calendar.length - 1].reviews;
+  const done = data.done.cards;
+  const goal = data.goal;
   const pending = data.due.total;
-  const total = done + pending;
 
   const panel = $("ring");
   panel.replaceChildren();
 
-  // Sin nada programado y sin nada hecho no hay fracción que dibujar, y un
-  // anillo vacío al 0 % es la lectura más desalentadora de un día libre.
-  if (total === 0) {
+  // El anillo mide contra la meta, no contra el atraso. Contra 271 pendientes
+  // nunca se cierra, y un anillo que no se puede cerrar deja de ser una meta.
+  if (!pending && !done) {
     panel.append(el("p", "empty", "Hoy no hay nada programado."));
     return;
   }
 
   const dial = el("div", "ring-wrap");
-  dial.append(ringSvg(done / total));
+  dial.append(ringSvg(goal ? Math.min(1, done / goal) : 0));
 
   const center = el("div", "ring-center");
-  center.append(el("span", "ring-value", `${done} / ${total}`),
-                el("span", "ring-unit", "tarjetas"));
+  center.append(el("span", "ring-value", `${done} / ${goal}`),
+                el("span", "ring-unit", "meta"));
   dial.append(center);
 
-  const foot = el("p", "ring-foot", pending
-    ? `${plural(pending, "tarjeta pendiente", "tarjetas pendientes")}`
-    : "Terminaste lo de hoy.");
+  const foot = el("p", "ring-foot", done >= goal
+    ? "Meta cumplida."
+    : `${plural(pending, "pendiente acumulada", "pendientes acumuladas")}`);
 
   panel.append(dial, foot);
 }

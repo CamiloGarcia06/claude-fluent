@@ -127,13 +127,67 @@ def calendar(reviews: list[Review], today: date, days: int = CALENDAR_DAYS) -> l
     return out
 
 
+def in_scope(deck: str) -> bool:
+    """¿Este mazo es de este app?
+
+    Sí cuando cuelga de una de las cinco skills — `Reading`,
+    `Reading::A1::Mil palabras` — y no en cualquier otro caso. La colección es
+    de una persona, no de una app: al lado del inglés viven los mazos de una
+    maestría, y sumarlos infla las pendientes, alarga la racha con días en que
+    no tocaste inglés y mete tarjetas de otro idioma en el ranking de atascos.
+
+    No hay lista que mantener ni ajuste que recordar: **el nombre del mazo es
+    la base de datos**, acá también. Lo que el app crea nace dentro de la
+    convención y entra solo; lo que no la sigue se queda afuera y se sigue
+    viendo en Mazos, que es donde un mazo que el app no entiende importa.
+    """
+    head = deck.split("::")[0].strip().lower()
+    return head in {skill.lower() for skill in SKILLS}
+
+
+def english_only(reviews: list[Review]) -> list[Review]:
+    """Los repasos de los mazos de este app."""
+    return [r for r in reviews if in_scope(r.deck)]
+
+
+def done_today(reviews: list[Review], today: date) -> dict:
+    """Lo hecho hoy: tarjetas distintas y repasos.
+
+    Las dos cifras porque no son la misma: fallar una tarjeta y volver a verla
+    diez minutos después son dos repasos de una sola tarjeta, y una meta que
+    contara repasos se cumpliría fallando.
+    """
+    rows = [r for r in reviews if _day(r.timestamp_ms) == today]
+    return {"cards": len({r.card_id for r in rows}), "reviews": len(rows)}
+
+
 def due_by_deck(deck_counts: list[dict]) -> dict:
     """Shape the per-deck due counts and total them. Due state is scheduling,
-    not history, so it comes from Anki rather than from the revlog."""
-    decks = sorted(deck_counts, key=lambda d: (-d["due"], d["deck"]))
+    not history, so it comes from Anki rather than from the revlog.
+
+    **Anki rolls a deck's counts up into its parents.** Summing every row
+    counts each card once per level of its name: with `Reading`,
+    `Reading::A1` and `Reading::A1::Mil palabras` all reporting the same 206,
+    a collection of 458 cards claimed 1147 waiting. Nothing was wrong with the
+    data — the naming convention gave the decks parents for the first time,
+    and the old flat collection had hidden the bug.
+
+    So the total is the sum of the **roots**, which is exactly what Anki's own
+    deck browser shows and exactly what a session will serve; and the list is
+    the **leaves**, which are the decks you can actually pick. They do not add
+    up, and that is Anki being honest: a parent's daily limit can be lower than
+    the sum of its children — 206 + 119 under a parent that will serve 212.
+    """
+    rows = [d for d in deck_counts if in_scope(d["deck"])]
+    names = {d["deck"] for d in rows}
+    is_container = lambda name: any(o.startswith(f"{name}::") for o in names)
+
+    roots = [d for d in rows if "::" not in d["deck"]]
+    leaves = [d for d in rows if not is_container(d["deck"])]
+
     return {
-        "total": sum(d["due"] for d in decks),
-        "decks": decks,
+        "total": sum(d["due"] for d in roots),
+        "decks": sorted(leaves, key=lambda d: (-d["due"], d["deck"])),
     }
 
 
@@ -195,7 +249,12 @@ def struggling(reviews: list[Review], limit: int | None = 12) -> list[dict]:
 
 
 def summary(reviews: list[Review], deck_counts: list[dict], today: date) -> dict:
-    """Everything the Today screen needs, in one object."""
+    """Everything the Today screen needs, in one object.
+
+    Todo lo que sale de acá mira sólo los mazos de este app: la racha cuenta
+    días en que estudiaste **inglés**, no días en que abriste Anki.
+    """
+    reviews = english_only(reviews)
     total_seconds = sum(r.duration_ms for r in reviews) / 1000.0
     # Ranked once and read twice: Hoy paints the head of the list, the Dashboard
     # counts it. With the list cut to twelve, "7 atascos" and "40 atascos" would
@@ -203,6 +262,7 @@ def summary(reviews: list[Review], deck_counts: list[dict], today: date) -> dict
     stuck = struggling(reviews, limit=None)
     return {
         "date": today.isoformat(),
+        "done": done_today(reviews, today),
         "streak": streak(reviews, today),
         "due": due_by_deck(deck_counts),
         "calendar": calendar(reviews, today),

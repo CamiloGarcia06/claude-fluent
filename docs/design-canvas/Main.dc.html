@@ -1,0 +1,187 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    :root {
+      --paper:        #fbfbfa;
+      --paper-inset:  #f4f4f2;
+      --ink:          #1b1d20;
+      --ink-2:        #4a4e54;
+      --ink-3:        #7c8188;
+      --ink-4:        #a8adb4;
+      --rule:         rgba(27, 29, 32, 0.13);
+      --rule-faint:   rgba(27, 29, 32, 0.07);
+      --rule-blue:    rgba(42, 85, 128, 0.30);
+      --present:      #2a5580;
+      --present-ink:  #ffffff;
+      --kraft:        #8a6f4a;
+      --kraft-dim:    rgba(138, 111, 74, 0.10);
+      --alarm:        #a8342a;
+      --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Cantarell, "Noto Sans", sans-serif;
+      --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink-2);
+      font: 400 15px/1.55 var(--font);
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--present); text-decoration: none; }
+    a:hover { color: var(--ink); text-decoration: underline; }
+    ul.rows { list-style: none; margin: 8px 0 0; padding: 0; }
+    ul.rows li {
+      display: flex; align-items: baseline; gap: 12px;
+      padding: 12px 8px; border-bottom: 1px solid var(--rule-faint);
+    }
+    ul.rows li:last-child { border-bottom: 0; }
+    .cal { display: grid; grid-template-columns: repeat(10, 1fr); gap: 8px; margin-top: 16px; }
+    .day { aspect-ratio: 1; border-radius: 3px; background: var(--ink); }
+    .day.off { background: var(--paper-inset); box-shadow: inset 0 0 0 1px var(--rule-faint); }
+    .day.today { position: relative; box-shadow: inset 0 0 0 1px var(--rule-blue); }
+    .day.today::after {
+      content: ""; position: absolute; left: 0; right: 0; bottom: -6px;
+      height: 2px; border-radius: 1px; background: var(--present);
+    }
+  </style>
+</helmet>
+<header style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 24px; border-bottom: 1px solid var(--rule-faint)">
+  <span style="font-size: 13px; font-weight: 600; letter-spacing: 0.02em; color: var(--ink-2)">claude-fluent</span>
+  <nav style="display: flex; gap: 4px">
+    <a href="#" style="font-size: 13px; color: var(--ink); background: var(--paper-inset); text-decoration: none; padding: 8px 12px; border-radius: 6px">Hoy</a>
+    <a href="#" style="font-size: 13px; color: var(--ink-3); text-decoration: none; padding: 8px 12px; border-radius: 6px">Mazos</a>
+    <a href="#" style="font-size: 13px; color: var(--ink-3); text-decoration: none; padding: 8px 12px; border-radius: 6px">Ajustes</a>
+  </nav>
+</header>
+
+<main style="max-width: 1080px; margin: 0 auto; padding: 48px 24px">
+
+  <section style="display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 24px; padding-bottom: 32px; margin-bottom: 32px; border-bottom: 1px solid var(--rule-faint)">
+    <p style="grid-column: 1; margin: 0 0 4px; font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-4)">Martes, 18 de agosto</p>
+    <h1 style="grid-column: 1; margin: 0; font-size: 34px; font-weight: 600; line-height: 1.15; letter-spacing: -0.022em; color: var(--ink); text-wrap: balance">48 tarjetas te esperan hoy</h1>
+    <button type="button" style="grid-column: 2; grid-row: 1 / span 2; justify-self: end; font: 600 16px/1 var(--font); color: var(--present-ink); background: var(--present); border: 1px solid var(--present); border-radius: 6px; padding: 16px 32px; min-height: 48px; cursor: pointer">Empezar</button>
+    <div style="grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 24px">
+      <span style="font-family: var(--mono); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink); background: var(--paper-inset); border: 1px solid var(--rule-faint); border-radius: 6px; padding: 8px 12px; white-space: nowrap">Racha de 12 días</span>
+      <span style="font-size: 13px; line-height: 1.45; color: var(--kraft); background: var(--kraft-dim); border-radius: 6px; padding: 8px 12px; max-width: 48ch">Te queda 1 día de gracia este mes: faltar una vez no borra la racha.</span>
+    </div>
+  </section>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start">
+
+    <div style="display: grid; gap: 48px">
+      <section>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--rule)">
+      <h2 style="margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.006em; color: var(--ink)">Últimos 30 días</h2>
+      
+    </div>
+        <p style="margin: 12px 0 0; font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-4)">24 días con estudio</p>
+        <div class="cal">
+        <div class="day"></div>
+        <div class="day"></div>
+        <div class="day off"></div>
+        <div class="day"></div>
+        <div class="day"></div>
+        <div class="day"></div>
+        <div class="day off"></div>
+        <div class="day"></div>
+        <div class="day"></div>
+        <div class="day"></div>
+        <div class="day"></div>
+        <div class="day"></div>
+        <div class="day off"></div>
+        <div class="day off"></div>
+        <div class="day"></div>
+        <div class="day"></div>
+        <div class="day"></div>
+        <div class="day"></div>
+        <div class="day off"></div>
+        <div class="day"></div>
+        <div class="day"></div>
+        <div class="day"></div>
+        <div class="day"></div>
+        <div class="day off"></div>
+        <div class="day"></div>
+        <div class="day"></div>
+        <div class="day"></div>
+        <div class="day"></div>
+        <div class="day"></div>
+        <div class="day today"></div>
+        </div>
+      </section>
+
+      <section>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--rule)">
+      <h2 style="margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.006em; color: var(--ink)">Vengo fallando</h2>
+      <a href="#" style="font-size: 12px; color: var(--ink-3); text-decoration: none; white-space: nowrap">ver las 12</a>
+    </div>
+        <ul class="rows">
+      <li>
+        <span style="flex: 1; min-width: 0; font-size: 15px; color: var(--ink)">to put up with</span>
+        <span style="font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-3); white-space: nowrap">7 fallos de 10</span>
+      </li>
+      <li>
+        <span style="flex: 1; min-width: 0; font-size: 15px; color: var(--ink)">compromise</span>
+        <span style="font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-3); white-space: nowrap">6 fallos de 10</span>
+      </li>
+      <li>
+        <span style="flex: 1; min-width: 0; font-size: 15px; color: var(--ink)">thorough</span>
+        <span style="font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-3); white-space: nowrap">4 fallos de 10</span>
+      </li>
+        </ul>
+      </section>
+    </div>
+
+    <div style="display: grid; gap: 48px">
+      <section>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--rule)">
+      <h2 style="margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.006em; color: var(--ink)">Mis mazos</h2>
+      <a href="#" style="font-size: 12px; color: var(--ink-3); text-decoration: none; white-space: nowrap">+ nuevo</a>
+    </div>
+        <ul class="rows">
+      <li>
+        <span style="flex: 1; min-width: 0; font-size: 15px; color: var(--ink)">Phrasal verbs</span>
+        <span style="font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-3); white-space: nowrap">8 para hoy</span>
+      </li>
+      <li>
+        <span style="flex: 1; min-width: 0; font-size: 15px; color: var(--ink)">Pronunciación TH / R</span>
+        <span style="font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-3); white-space: nowrap">12 para hoy</span>
+      </li>
+      <li>
+        <span style="flex: 1; min-width: 0; font-size: 15px; color: var(--ink)">6 Minute English</span>
+        <span style="font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-3); white-space: nowrap">6 para hoy</span>
+      </li>
+      <li>
+        <span style="flex: 1; min-width: 0; font-size: 15px; color: var(--ink)">Conectores formales</span>
+        <span style="font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-3); white-space: nowrap">9 para hoy</span>
+      </li>
+      <li>
+        <span style="flex: 1; min-width: 0; font-size: 15px; color: var(--ink)">Noticias en inglés</span>
+        <span style="font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-3); white-space: nowrap">13 para hoy</span>
+      </li>
+      <li>
+        <span style="flex: 1; min-width: 0; font-size: 15px; color: var(--ink)">Irregular verbs</span>
+        <span style="font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-3); white-space: nowrap">al día</span>
+      </li>
+        </ul>
+      </section>
+    </div>
+
+  </div>
+</main>
+</x-dc>
+<script data-dc-script data-props='{"$preview": {"width": 1080, "height": 820}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

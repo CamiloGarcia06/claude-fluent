@@ -1,0 +1,108 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    :root {
+      --paper:        #fbfbfa;
+      --paper-inset:  #f4f4f2;
+      --ink:          #1b1d20;
+      --ink-2:        #4a4e54;
+      --ink-3:        #7c8188;
+      --ink-4:        #a8adb4;
+      --rule:         rgba(27, 29, 32, 0.13);
+      --rule-faint:   rgba(27, 29, 32, 0.07);
+      --rule-blue:    rgba(42, 85, 128, 0.30);
+      --present:      #2a5580;
+      --present-ink:  #ffffff;
+      --kraft:        #8a6f4a;
+      --kraft-dim:    rgba(138, 111, 74, 0.10);
+      --alarm:        #a8342a;
+      --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Cantarell, "Noto Sans", sans-serif;
+      --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink-2);
+      font: 400 15px/1.55 var(--font);
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--present); text-decoration: none; }
+    a:hover { color: var(--ink); text-decoration: underline; }
+    ul.rows { list-style: none; margin: 8px 0 0; padding: 0; }
+    ul.rows li {
+      display: flex; align-items: baseline; gap: 12px;
+      padding: 12px 8px; border-bottom: 1px solid var(--rule-faint);
+    }
+    ul.rows li:last-child { border-bottom: 0; }
+    .cal { display: grid; grid-template-columns: repeat(10, 1fr); gap: 8px; margin-top: 16px; }
+    .day { aspect-ratio: 1; border-radius: 3px; background: var(--ink); }
+    .day.off { background: var(--paper-inset); box-shadow: inset 0 0 0 1px var(--rule-faint); }
+    .day.today { position: relative; box-shadow: inset 0 0 0 1px var(--rule-blue); }
+    .day.today::after {
+      content: ""; position: absolute; left: 0; right: 0; bottom: -6px;
+      height: 2px; border-radius: 1px; background: var(--present);
+    }
+  </style>
+</helmet>
+<main style="padding: 40px">
+
+  <p style="margin: 0; font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-4)">Reading — template de note type</p>
+  <p style="margin: 8px 0 0; font-size: 15px; color: var(--ink-2); max-width: 78ch; text-wrap: pretty">El texto va alineado arriba y a la izquierda, no centrado como las demás. En la respuesta se colapsa para que no compita con ella. Límite duro de largo: si no entra en la carta, no es una tarjeta, es un ejercicio de lectura.</p>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 32px">
+
+    <div>
+      <p style="margin: 0 0 8px; font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-4)">Cara de pregunta</p>
+      <div style="border: 1px solid var(--rule); border-radius: 6px; padding: 32px; display: flex; flex-direction: column; min-height: 460px; gap: 24px">
+        <p style="margin: 0; font-size: 16px; line-height: 1.6; color: var(--ink); text-align: left; text-wrap: pretty">The council has approved a 12% increase in transit fares, the first since 2019. Officials say the revenue will fund the long-delayed extension of the eastern line, though critics argue riders are paying twice for a service they were already promised.</p>
+        <div style="height: 1px; background: var(--rule-faint)"></div>
+        <p style="margin: 0; font-size: 18px; font-weight: 600; line-height: 1.35; letter-spacing: -0.006em; color: var(--ink)">¿Por qué los críticos se oponen al aumento?</p>
+        <p style="margin: auto 0 0; font-size: 13px; color: var(--ink-3)">Respondé mentalmente antes de dar vuelta.</p>
+      </div>
+    </div>
+
+    <div>
+      <p style="margin: 0 0 8px; font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-4)">Cara de respuesta</p>
+      <div style="border: 1px solid var(--rule); border-radius: 6px; padding: 32px; display: flex; flex-direction: column; min-height: 460px; gap: 20px">
+        <button type="button" style="font: 500 13px/1 var(--font); color: var(--ink-2); background: transparent; border: 1px solid var(--rule); border-radius: 6px; padding: 8px 12px; cursor: pointer; align-self: flex-start; display: inline-flex; align-items: center; gap: 8px">Ver el texto <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9.5 12 15.5 18 9.5"/></svg></button>
+        <p style="margin: 0; font-size: 20px; line-height: 1.4; letter-spacing: -0.006em; color: var(--ink); text-wrap: pretty">Porque consideran que ya pagaron por una extensión que les habían prometido.</p>
+        <div style="height: 1px; background: var(--rule-faint)"></div>
+        <p style="margin: 0; font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-4)">Vocabulario del texto</p>
+        <ul style="list-style: none; margin: 0; padding: 0">
+          <li style="display: flex; align-items: baseline; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--rule-faint)">
+            <span style="font-family: var(--mono); font-size: 14px; color: var(--ink); flex: none; min-width: 15ch">fare</span>
+            <span style="font-size: 15px; color: var(--ink-3)">tarifa de transporte</span>
+          </li>
+          <li style="display: flex; align-items: baseline; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--rule-faint)">
+            <span style="font-family: var(--mono); font-size: 14px; color: var(--ink); flex: none; min-width: 15ch">long-delayed</span>
+            <span style="font-size: 15px; color: var(--ink-3)">postergado hace mucho</span>
+          </li>
+          <li style="display: flex; align-items: baseline; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--rule-faint)">
+            <span style="font-family: var(--mono); font-size: 14px; color: var(--ink); flex: none; min-width: 15ch">riders</span>
+            <span style="font-size: 15px; color: var(--ink-3)">usuarios del transporte</span>
+          </li>
+        </ul>
+        <a href="#" style="margin-top: auto; display: inline-flex; align-items: center; gap: 8px; font-size: 14px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5.5v13"/><path d="M5.5 12h13"/></svg> Agregar «long-delayed» a mi mazo</a>
+      </div>
+    </div>
+
+  </div>
+</main>
+</x-dc>
+<script data-dc-script data-props='{"$preview": {"width": 1240, "height": 780}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

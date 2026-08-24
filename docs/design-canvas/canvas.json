@@ -1,0 +1,35 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html",      "title": "Hoy",       "x": 0,    "y": 0,    "w": 1080, "h": 820 },
+    { "file": "Mazos.dc.html",     "x": 1180, "y": 0,    "w": 1080, "h": 800 },
+    { "file": "Atascos.dc.html",   "x": 2360, "y": 0,    "w": 1080, "h": 1000 },
+    { "file": "Listening.dc.html", "x": 0,    "y": 1200, "w": 1240, "h": 700 },
+    { "file": "Speaking.dc.html",  "x": 1340, "y": 1200, "w": 1240, "h": 700 },
+    { "file": "Reading.dc.html",   "x": 2680, "y": 1200, "w": 1240, "h": 780 },
+    { "file": "Writing.dc.html",   "x": 4020, "y": 1200, "w": 1240, "h": 700 }
+  ],
+  "annotations": [
+    {
+      "id": "fila-pantallas",
+      "x": 0,
+      "y": -190,
+      "w": 700,
+      "text": "PANTALLAS DE LA APP\n\nMismo sistema que la pantalla Hoy ya construida: ficha de cartón fría, profundidad sólo de bordes, un único acento --present #2a5580 sobre el botón primario y la marca de hoy.\n\nHoy es la pantalla real, tal como está en static/. Mazos y Atascos son nuevas."
+    },
+    {
+      "id": "fila-cartas",
+      "x": 0,
+      "y": 1000,
+      "w": 700,
+      "text": "LAS 4 VARIANTES DE CARTA\n\nViajan a Anki como templates de note type (HTML + CSS), que es lo que las notas del wireframe marcan como MUDA.\n\nPor eso no hay chrome de sesión: el contador, la barra de avance y los botones de calificar los pone Anki, con sus 4 botones. Sólo se diseña la carta."
+    },
+    {
+      "id": "desvios",
+      "x": 3520,
+      "y": 0,
+      "w": 460,
+      "text": "DÓNDE ME APARTÉ DEL WIREFRAME\n\n· Sin sidebar ni marca LinguaDeck: con 6 mazos una lista plana alcanza.\n\n· Sin Precisión ni Tiempo estudiado: son métricas acumuladas, descartadas en CLAUDE.md.\n\n· Sin Dominio % por mazo, por lo mismo.\n\n· Chips de skill de colores → etiqueta mono en --ink-4. Un solo acento.\n\n· Severidad Crítica/Alta/Media y las barras rojas de las tarjetas falladas → nada de color. El orden por tiempo perdido ya dice cuál duele más.\n\n· Verde/rojo de correcto/incorrecto → el mismo par antes/después del panel de reparación: lo viejo a opacity .55, lo correcto con borde --rule-blue."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

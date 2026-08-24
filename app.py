@@ -11,6 +11,7 @@ import generate
 import llm
 import repair
 import snapshot
+import state
 
 app = FastAPI(title="claude-fluent")
 
@@ -51,6 +52,20 @@ def _window_start_ms(days: int = analysis.CALENDAR_DAYS) -> int:
     return int(start.timestamp() * 1000)
 
 
+@app.get("/api/settings")
+def settings() -> dict:
+    """Lo que decide el app y Anki no sabe. Hoy: la meta diaria."""
+    return state.read()
+
+
+@app.post("/api/settings")
+def save_settings(payload: dict) -> dict:
+    try:
+        return state.write(payload or {})
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
 @app.get("/api/health")
 def health() -> dict:
     """Checked first because every failure in this system is silent: Anki
@@ -59,7 +74,7 @@ def health() -> dict:
     return {
         "anki": anki.is_alive(),
         "claude": shutil.which("claude") is not None,
-        "last_sync": None,  # data/state.json is not written yet
+        "last_sync": state.read().get("last_sync"),
     }
 
 
@@ -71,6 +86,7 @@ def today() -> dict:
     reviews = anki.reviews_since(_window_start_ms())
     deck_counts = anki.due_counts()
     summary = analysis.summary(reviews, deck_counts, date.today())
+    summary["goal"] = state.read()["daily_goal"]
 
     # analysis.py stays pure, so the card text is looked up here and merged in.
     details = anki.card_summaries([c["card_id"] for c in summary["struggling"]])
@@ -103,7 +119,7 @@ def stuck() -> dict:
     if not anki.is_alive():
         raise HTTPException(503, "AnkiConnect is not answering — is Anki running?")
 
-    reviews = anki.reviews_since(_window_start_ms())
+    reviews = analysis.english_only(anki.reviews_since(_window_start_ms()))
     cards = analysis.struggling(reviews, limit=STUCK_LIMIT)
 
     # analysis.py stays pure, so the card text is looked up here and merged in.
@@ -114,7 +130,8 @@ def stuck() -> dict:
         card["note_id"] = found.get("note_id")
         card["severity"] = analysis.severity(card)
 
-    total_cards = sum(d["total"] for d in anki.deck_card_stats())
+    total_cards = sum(d["total"] for d in anki.deck_card_stats()
+                      if analysis.in_scope(d["deck"]))
     total_seconds = sum(r.duration_ms for r in reviews) / 1000.0
     return {
         "cards": cards,
@@ -169,11 +186,27 @@ def _stuck_with_text(limit: int) -> list[dict]:
     analysis.py stays pure, so the text is looked up here — the model needs to
     read the cards, not their ids.
     """
-    cards = analysis.struggling(anki.reviews_since(_window_start_ms()), limit=limit)
+    cards = analysis.struggling(
+        analysis.english_only(anki.reviews_since(_window_start_ms())), limit=limit)
     details = anki.card_summaries([c["card_id"] for c in cards])
     for card in cards:
         card["front"] = details.get(card["card_id"], {}).get("front", "")
     return cards
+
+
+def _decks_at(catalog: dict, focus: dict) -> list[str]:
+    """The decks of one skill and level, by full name.
+
+    The catalogue is a tree and both the term proposal and the syllabus need
+    the same branch of it; walking it twice by hand is how the two drift.
+    """
+    for skill in catalog["skills"]:
+        if skill["skill"] != focus["skill"]:
+            continue
+        for level in skill["levels"]:
+            if level["level"] == focus["level"]:
+                return [d["deck"] for d in level["decks"]]
+    return []
 
 
 @app.post("/api/generate/terms")
@@ -199,19 +232,55 @@ def generate_terms(payload: dict | None = None) -> dict:
     # entera y la lista no cabría en el prompt.
     have: list[str] = []
     if focus:
-        for skill in catalog["skills"]:
-            if skill["skill"] != focus["skill"]:
-                continue
-            for level in skill["levels"]:
-                if level["level"] != focus["level"]:
-                    continue
-                for deck in level["decks"]:
-                    have += anki.deck_fronts(deck["deck"], limit=FRONTS_FOR_PROMPT)
+        for deck in _decks_at(catalog, focus):
+            have += anki.deck_fronts(deck, limit=FRONTS_FOR_PROMPT)
 
     try:
         return generate.propose_terms(
             _stuck_with_text(STUCK_FOR_PROMPT), catalog, focus,
             topic=(payload or {}).get("topic", ""), have=have)
+    except llm.LLMError as e:
+        raise HTTPException(502, f"claude -p failed: {e}") from e
+
+
+@app.post("/api/syllabus")
+def syllabus(payload: dict | None = None) -> dict:
+    """El temario de un nivel, y qué parte de él cubre la colección.
+
+    La madurez responde "¿te acordás de tus tarjetas?"; esto responde "¿tus
+    tarjetas cubren el nivel?". Un nivel de un solo tema puede llegar al 60 %
+    de maduras y leerse como sostenido con la mitad del programa sin ver.
+
+    Es una llamada a `claude -p` y la más lenta del app — medida en 60 s
+    contra Grammar A1, porque el prompt lleva una muestra de cada mazo del
+    nivel. Por eso es su propia petición y nunca parte de `/api/catalog`, que
+    se lee en cada navegación: el temario se pide cuando se quiere ver.
+    """
+    focus = generate.focus_for(
+        (payload or {}).get("skill", ""), (payload or {}).get("level", ""))
+    if not focus:
+        raise HTTPException(400, "unknown skill or level")
+
+    if not anki.is_alive():
+        raise HTTPException(503, "AnkiConnect is not answering — is Anki running?")
+
+    decks = _decks_at(_catalog(), focus)
+
+    # Repartido entre los mazos y no por mazo: siete mazos a sesenta frentes
+    # serían cuatrocientas líneas de prompt, y un tope por mazo dejaría al
+    # último sin una sola tarjeta a la vista — invisible es indistinguible de
+    # vacío, y el modelo lo marcaría como no cubierto.
+    per_deck = max(4, FRONTS_FOR_PROMPT // max(1, len(decks)))
+    have: list[str] = []
+    for deck in decks:
+        topic = deck.split("::")[-1]
+        have += [f"{topic}: {front}"
+                 for front in anki.deck_fronts(deck, limit=per_deck)]
+
+    try:
+        return generate.propose_syllabus(
+            focus["skill"], focus["level"],
+            [d.split("::")[-1] for d in decks], have)
     except llm.LLMError as e:
         raise HTTPException(502, f"claude -p failed: {e}") from e
 

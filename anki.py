@@ -84,6 +84,11 @@ def snapshot_evidence() -> str | None:
 # in their sign.
 MATURE_SECONDS = 21 * 86400
 
+# Por debajo de esto, el primer campo es una etiqueta y no la pregunta:
+# "A · traducir", "B · corregir". Se le pega el campo siguiente para que la
+# fila diga de qué tarjeta habla.
+LABEL_LIKE_CHARS = 24
+
 # Review buttons, as stored in the revlog.
 AGAIN, HARD, GOOD, EASY = 1, 2, 3, 4
 
@@ -290,12 +295,26 @@ def card_summaries(card_ids: list[int]) -> dict[int, dict]:
     for card in call("cardsInfo", cards=card_ids):
         fields = card.get("fields", {})
         wanted = card.get("fieldOrder", 0)
-        value = next(
-            (f["value"] for f in fields.values() if f.get("order") == wanted),
-            next((f["value"] for f in fields.values()), ""),
-        )
+        ordered = sorted(fields.values(), key=lambda f: f.get("order", 0))
+
+        # El campo de la pregunta no siempre dice cuál es la tarjeta: el note
+        # type de gramática abre con "Tipo", así que la lista de atascos
+        # mostraba seis filas llamadas "B · corregir". Si el primero es una
+        # etiqueta corta se le pega el siguiente, que es la tarjeta de verdad.
+        first = next((f["value"] for f in ordered if f.get("order") == wanted),
+                     ordered[0]["value"] if ordered else "")
+        text = strip_html(first)
+        if len(text) < LABEL_LIKE_CHARS:
+            rest = next((strip_html(f["value"]) for f in ordered
+                         if strip_html(f["value"]) and strip_html(f["value"]) != text), "")
+            if rest:
+                # Un número de orden no es ni etiqueta ni pregunta: el mazo de
+                # Refold abre con "Índice de ordenación", y "369 · bend" dice
+                # menos que "bend".
+                text = rest if text.isdigit() or not text else f"{text} · {rest}"
+
         out[card["cardId"]] = {
-            "front": strip_html(value),
+            "front": text,
             "note_id": card.get("note"),
         }
     return out

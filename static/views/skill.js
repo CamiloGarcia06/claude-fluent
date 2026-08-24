@@ -43,6 +43,82 @@ function deckRow(deck) {
   return li;
 }
 
+// ── El temario ───────────────────────────────────────────────────────
+// La madurez dice si te acordás de tus tarjetas. El temario dice si tus
+// tarjetas cubren el nivel, que es otra pregunta: siete mazos de presente
+// simple llegan al 60 % de maduras y dejan sin ver la mitad del programa.
+//
+// Se pide a mano y no al entrar: es la llamada más lenta del app, cerca de un
+// minuto cuando el nivel ya tiene mazos, y nadie quiere esperarla para leer
+// una lista de mazos.
+
+function pointRow(point, skillName, levelName) {
+  const li = el("li", "point");
+  li.dataset.covered = String(Boolean(point.covered_by));
+
+  const name = el("span", "name");
+  const title = el("span", "point-title", point.point);
+  if (point.english) title.append(el("span", "point-en", point.english));
+  name.append(title);
+  if (point.note) name.append(el("span", "point-note", point.note));
+  li.append(name);
+
+  if (point.covered_by) {
+    li.append(el("span", "count", point.covered_by));
+    return li;
+  }
+
+  // Un punto sin cubrir es lo próximo a generar, y llega escrito en la caja
+  // de Agregar en vez de obligarte a recordarlo y teclearlo de nuevo.
+  const fill = el("a", "count", "generar");
+  fill.href = `#/agregar/${slug(skillName)}/${levelName}/` +
+              encodeURIComponent(point.point);
+  li.append(fill);
+  return li;
+}
+
+function renderSyllabus(box, data, skillName, levelName) {
+  box.replaceChildren();
+
+  if (!data.points.length) {
+    box.append(el("p", "syllabus-note", "El modelo no devolvió ningún punto para este nivel."));
+    return;
+  }
+
+  box.append(el("p", "syllabus-note",
+    `${data.covered} de ${data.total} puntos cubiertos por tus mazos.`));
+
+  const list = el("ul", "rows");
+  for (const point of data.points) {
+    list.append(pointRow(point, skillName, levelName));
+  }
+  box.append(list);
+}
+
+async function loadSyllabus(button, box, skillName, levelName) {
+  button.disabled = true;
+  box.hidden = false;
+  box.replaceChildren(el("p", "syllabus-note",
+    "Leyendo el temario y comparándolo con tus mazos… tarda cerca de un minuto."));
+
+  try {
+    const data = await getJSON("/api/syllabus", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ skill: skillName, level: levelName }),
+    });
+    renderSyllabus(box, data, skillName, levelName);
+  } catch (error) {
+    // El temario es un extra sobre una pantalla que ya sirve, así que su fallo
+    // se queda dentro de su propio panel: no se tira al router ni borra la
+    // lista de mazos que está arriba.
+    box.replaceChildren(el("p", "syllabus-note", error.message));
+  } finally {
+    button.disabled = false;
+    button.textContent = "Volver a leer el temario";
+  }
+}
+
 function levelPanel(level, skill, threshold) {
   const section = el("section", "panel");
 
@@ -52,9 +128,12 @@ function levelPanel(level, skill, threshold) {
     heading.append(el("span", "rail-chip", "estás acá"));
   }
   head.append(heading);
-  head.append(el("span", "sub", level.total
+
+  const meta = el("span", "panel-meta");
+  meta.append(el("span", "sub", level.total
     ? `${percent(level.maturity)} maduras${level.maturity >= threshold ? " · sostenido" : ""}`
     : "hueco"));
+  head.append(meta);
   section.append(head);
 
   const list = el("ul", "rows");
@@ -72,6 +151,16 @@ function levelPanel(level, skill, threshold) {
     for (const deck of level.decks) list.append(deckRow(deck));
   }
   section.append(list);
+
+  const button = el("button", "ghost syllabus-open", "Ver temario");
+  button.type = "button";
+  const box = el("div", "syllabus");
+  box.hidden = true;
+  button.addEventListener("click", () =>
+    loadSyllabus(button, box, skill.skill, level.level));
+  meta.append(button);
+  section.append(box);
+
   return section;
 }
 

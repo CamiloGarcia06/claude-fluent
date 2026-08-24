@@ -27,6 +27,7 @@ looks normal while it lies to you.
 | `anki.py` | AnkiConnect client. `call(action, **params)` and the helpers over it. Owns the write guard. |
 | `analysis.py` | **Pure functions** over a list of reviews. No I/O, no clock — every function takes its data and its reference date, so it is testable without Anki. |
 | `snapshot.py` | **The only write path into Anki.** Records the previous state, then holds the lock while the write happens. |
+| `state.py` | `data/state.json`: lo único que decide el app y Anki no sabe. Hoy, la meta diaria. |
 | `repair.py` | Prompt and schema for rewriting a stuck card. Proposes only, never writes. |
 | `generate.py` | Prompts, schemas and the note type for card generation. Proposes only. Everything the model returns is treated as untrusted: the skill and the level must be ones this app knows, and the topic is scrubbed. |
 | `llm.py` | `claude -p` wrapper. Checks `is_error` on stdout, never uses `--bare`. |
@@ -50,14 +51,16 @@ cases checked in seconds.
 | | |
 |---|---|
 | `GET /api/health` | Is Anki answering, is `claude` on PATH |
+| `GET · POST /api/settings` | The daily goal. The only thing this app stores about itself |
 | `GET /api/today` | Everything Hoy needs, in one object, and everything the Dashboard needs bar the catalogue. `struggling` is the head of the ranking — what Hoy lists — and `struggling_total` how long it really is, which is the figure the Dashboard strip shows: cut to twelve, 12 stuck cards and 40 would read the same. |
 | `GET /api/catalog` | Skill → level → decks, with maturity, the level you stand on, the holes and what is next. Feeds Progreso, the five skill screens, Mazos and the skill meters on Hoy. |
-| `GET /api/stuck` | The full stuck ranking with severity and the minutes it costs |
+| `GET /api/stuck` | The full stuck ranking with severity and the minutes it costs. Reads only the decks in scope |
 | `POST /api/study` | Hands the session to Anki's reviewer. `?deck=` picks one; without it the busiest wins. 409 when nothing is due — including when the named deck has nothing. |
 | `POST /api/add-cards` | Opens Anki's Add dialog. The escape hatch at the foot of Agregar, not a screen's main action |
 | `POST /api/generate/terms` | What is worth studying next. An optional `{topic}` — whatever is in the box — is opened into its terms; without it, the stuck cards and the empty levels answer. An optional `{skill, level}` narrows either to one hole. **Writes nothing.** |
 | `POST /api/generate/cards` | Candidates for **one** term plus the deck they belong in. One term per request: each is its own 8–18 s `claude -p` call. **Writes nothing.** |
 | `POST /api/notes` | Creates the approved cards. Ensures the note type, then one `snapshot.add_notes` per deck. Reports what Anki refused and why, per card |
+| `POST /api/syllabus` | The points that make up one `{skill, level}`, and which of them the collection covers. Derived on every read, stored nowhere. The slowest call in the app — 60 s on a level that already has decks. **Writes nothing.** |
 | `POST /api/repair/{note_id}` | Asks the model for a better card. **Writes nothing.** |
 | `POST /api/apply/{note_id}` | Snapshots, then writes the approved fields |
 
@@ -222,6 +225,16 @@ Everything about levels rests on one rule: a deck is named
 `analysis.SKILLS`, levels the five in `analysis.LEVELS`; matching is
 case-insensitive and the canonical spelling is what comes back.
 
+**The name also says what belongs to this app.** `analysis.in_scope()` counts
+a deck when its first component is one of the five skills, and nothing else.
+The collection belongs to a person, not to an app: next to the English there
+are decks for a master's degree, and counting them inflated the cards due,
+would have stretched the streak with days that had no English in them, and put
+Spanish NLP cards in the stuck ranking. There is no list to maintain and no
+setting to remember — what this app creates is born inside the convention and
+is in by construction; what is not stays out, and stays visible on Mazos, which
+is where a deck the app cannot read actually matters.
+
 **The name is the whole database.** The classification is derived on every read
 and nothing is stored, so renaming a deck in Anki reclassifies it and there is
 no mapping on disk that can drift. Renaming is the editing interface.
@@ -238,12 +251,51 @@ the walk stops there. A level with no cards is a **hole**, and holes are what to
 generate next — a missing level and a weak level need different actions, and
 keeping them apart is what makes Progreso a diagnosis instead of a progress bar.
 
+## The syllabus of a level
+
+Maturity answers **"do you remember your cards"**. It cannot answer **"do your
+cards cover the level"**, and those are different questions: Grammar A1 holds
+seven decks — Present simple, its negatives, its questions, Verb to be,
+Questions with be, Short answers, Wh- questions — which is *one* point sliced
+seven ways. Twenty-four cards, and a level that would read as held at 60 %
+maturity with most of its programme never studied. That is the silent failure
+this app is built to avoid, so `POST /api/syllabus` asks the other question.
+
+**The syllabus is derived, never stored.** What an A1 of grammar teaches is a
+public, stable fact and the model knows it; a `syllabus.json` on disk would be
+a second database beside the deck names, and the copy is always the one that
+drifts. Same rule as the classification: nothing on disk, re-read every time.
+
+**Only `covered_by` is a claim about the collection, so it is the only thing
+verified.** The model is handed the topics of that level and a sample of the
+cards inside them, and returns the topic that already teaches each point.
+`generate.propose_syllabus` accepts it only if it names a topic that really
+exists; anything else is read as not covered. That is the safe side of the
+error — a gap too many proposes work you can decline, a gap too few hides it.
+
+**The sample is spread across the decks, not taken per deck.** Seven decks at
+sixty fronts each would be four hundred lines of prompt, and a per-deck cap
+would leave the last decks with nothing visible — invisible is indistinguishable
+from empty, and the model would mark them uncovered.
+
+**What counts as a point depends on the skill.** Without saying so the model
+returns grammar for all five: the first Writing A1 tried came back with
+"artículos a/an/the" and "plural de los sustantivos", which is Grammar's
+syllabus under another name. `generate.SYLLABUS_POINT` says what a point is for
+each — a text you can produce for Writing, a situation you can handle for
+Speaking.
+
+An uncovered point carries into `#/agregar/<skill>/<level>/<topic>`, which
+writes it into the box — and the box is the question, so the terms proposed are
+the ones that point is made of.
+
 ## Front end
 
 No framework, no build step, no npm. Save a file, reload the browser.
 
 - **Nine screens, hash routing.** `#/hoy`, `#/progreso`, `#/skill/<skill>`,
-  `#/mazos`, `#/agregar` (also `#/agregar/<skill>/<level>`), `#/atascos`,
+  `#/mazos`, `#/agregar` (also `#/agregar/<skill>/<level>` and
+  `#/agregar/<skill>/<level>/<topic>`), `#/atascos`,
   `#/ajustes`, `#/dashboard`. Hash and not path:
   `StaticFiles` is mounted at the root and knows nothing about `/progreso`, so
   reloading a path route would 404.
@@ -310,6 +362,14 @@ No framework, no build step, no npm. Save a file, reload the browser.
   when you review; planning dates means planning something it will contradict.
 - **No cumulative metrics** (total time, global accuracy). Only what depends on
   showing up today: streak, cards due, 30-day calendar.
+- **The headline is the goal, not the backlog.** 271 due is an import of a
+  thousand cards, not a debt you ran up; as a headline it only discourages, and
+  discouraging is the one thing this app cannot afford. The backlog stays
+  visible under the bar, in grey, with its reason.
+- **The goal lives in `data/state.json`, never in Anki's deck options.** A
+  limit written into Anki changes what Anki itself serves, on the desktop and
+  on the phone, and scheduling belongs to Anki. The goal is this app's: an
+  intention, not a cap.
 - **The streak has one grace day per month.** Breaking it is the moment of
   highest abandonment risk.
 - **Never write to Anki without recording the previous state.** Additive
@@ -362,6 +422,18 @@ A revlog row is
 - **`addNotes` is all-or-nothing.** One bad note raises for the whole call —
   `['cannot create note because it is a duplicate']` — instead of returning a
   null for that slot. Check with `canAddNotesWithErrorDetail` before writing.
+- **Deck counts roll up into the parents.** `getDeckStats` reports the same
+  206 for `Reading`, `Reading::A1` and `Reading::A1::Mil palabras`, so summing
+  every row counts each card once per level of its name — 458 due cards read
+  as 1147. `analysis.due_by_deck` totals the **roots** and lists the
+  **leaves**: the first is what Anki will serve today, the second is what you
+  can pick. They do not add up, because a parent's daily limit can be lower
+  than the sum of its children.
+- **The first field is not always the question.** The grammar note type opens
+  with `Tipo`, so the stuck list showed six rows called "B · corregir", and
+  Refold opens with a sort index. `anki.card_summaries` and `anki.deck_fronts`
+  join the next field when the first is shorter than
+  `anki.LABEL_LIKE_CHARS`, and drop it when it is a bare number.
 - **A deck created through AnkiConnect gets the default options preset.**
   `createDeck` takes no preset, so a merge moves the cards with their
   scheduling intact — intervals, maturity, due dates — into a deck whose daily
@@ -428,15 +500,16 @@ The `interface-design` skill is installed in `.claude/skills/`, with
 
 - `spike_anki.py` still reads `decks[0]`, which is `Default` and always empty.
   The app itself no longer makes that mistake; the spike was left as written.
-- `data/state.json` does not exist yet, so `/api/health` reports
-  `last_sync: null` unconditionally and the dials on Ajustes are read-only.
+- `data/state.json` now exists and holds the daily goal, which Ajustes writes.
+  `last_sync` is still never written, so `/api/health` keeps reporting null.
 - The collection also holds the decks of a master's degree (`PLN in Action`),
-  which are not English and are deliberately left outside the convention. They
-  land in "sin clasificar" — but they still count towards the streak, the
-  calendar, the weekly bars and the stuck ranking, because `/api/today` reads
-  every review in the collection. Scoping those to the English decks is not
-  built.
+  which are not English. They are out of scope by name — see below — so they
+  show on Mazos and nowhere else.
 - Mazos lists and searches but cannot rename or archive yet.
+- **AnkiConnect cannot build a filtered deck** — verified against `apiReflect`.
+  So "30 of vocabulary plus 10 of phrasal verbs" in one session is not
+  possible from here: the topic picker opens **one** deck, which is what
+  `guiDeckReview` can do.
 - **AnkiConnect has no `renameDeck`** — verified against the 121 actions of
   `apiReflect`. `snapshot.move_cards()` now covers it, so a rename or a merge
   is possible and reversible; what is still missing is the screen for it on
@@ -457,6 +530,11 @@ hole, three candidates per term in a single table, edit them in place, pick an
 existing deck or build a new one, and write with a creation record. Verified against the live collection — note type
 created, two cards written, read back from Anki, and undone from the record.
 
-Not built: rename/archive on Mazos, writable settings, and the exercise mode.
+The syllabus reads on the five skill screens: one button per level panel,
+which names what that level is made of and marks what your decks already
+cover. Verified against the live collection — Grammar A1 came back 7 of 14,
+and the seven it credits are all the same point sliced into seven decks.
+
+Not built: rename/archive on Mazos and the exercise mode.
 
 (Update this section after each phase.)

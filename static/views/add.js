@@ -605,13 +605,22 @@ export async function render(root, params = []) {
   ].sort((a, b) => a.localeCompare(b));
 
   // #/agregar/Grammar/A1 — venís de un hueco, y el modelo propone para ese
-  // hueco en vez de para la colección entera.
-  const [rawSkill, rawLevel] = params;
+  // hueco en vez de para la colección entera. Un tercer tramo,
+  // #/agregar/Grammar/A1/Art%C3%ADculos%20a%20%2F%20an, es un punto del
+  // temario: llega escrito en la caja, que es de donde sale la pregunta.
+  const [rawSkill, rawLevel, rawTopic] = params;
   const skill = skills.find((s) => s.toLowerCase() === String(rawSkill).toLowerCase());
   const level = levels.find((l) => l.toLowerCase() === String(rawLevel).toLowerCase());
   if (skill && level) {
     focus = { skill, level };
-    hint(`Vas a llenar ${skill} ${level}. "Proponer desde mis fallos" busca términos para ese nivel.`);
+    const topic = rawTopic ? decodeURIComponent(rawTopic).trim() : "";
+    if (topic) {
+      $("terms").value = topic;
+      hint(`Vas a cubrir “${topic}” en ${skill} ${level}. ` +
+           `"Proponer términos" lo abre en los términos que lo componen.`);
+    } else {
+      hint(`Vas a llenar ${skill} ${level}. "Proponer desde mis fallos" busca términos para ese nivel.`);
+    }
   }
 
   $("generate").addEventListener("click", run);

@@ -267,6 +267,20 @@ failed said so in the hero, a full screen of scrolling above the button that
 had just been pressed, which is the same as not saying it. Red here only when
 the write actually failed — the one licence `--alarm` has on this screen.
 
+### Goal bar (Hoy)
+Under the hero, before anything else: `12 de 40` in mono 16/600 on the left, the
+backlog in 13px `--ink-3` on the right, and the 8px meter under both. The bar is
+the rail's vocabulary again — `--paper-inset` track, `--ink` fill.
+**What may be the headline:** the goal. The backlog is never the sentence at the
+top; it sits in grey with its reason ("la meta es lo de hoy"), because a number
+you cannot clear today is a bill, not an invitation.
+
+### Topic chips (Hoy)
+One chip per deck with cards due: topic on the left, count in mono `--ink-3` on
+the right, hand-drawn outline alternating `--r-rough` / `--r-rough-alt`. A theme
+is a deck, so picking one and opening it are the same act — and it is the only
+shape available, since AnkiConnect cannot build a filtered deck out of two.
+
 ### Streak pill
 mono 13/500 tabular · 8px 12px · 6px radius · `--paper-inset` on 1px `--rule-faint`
 

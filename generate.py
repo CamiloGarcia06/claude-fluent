@@ -113,6 +113,33 @@ CARDS_SCHEMA = {
     "required": ["skill", "level", "topic", "candidates"],
 }
 
+# El temario de un nivel es un hecho público y estable: lo que enseña un A1 de
+# gramática no depende de esta colección. Por eso se deriva en cada lectura en
+# vez de guardarse — un archivo con el programa de A1 sería una segunda base de
+# datos al lado de los nombres de mazo, y la que se desincroniza es siempre la
+# copia.
+MAX_SYLLABUS_POINTS = 14
+
+SYLLABUS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "points": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "point": {"type": "string"},
+                    "english": {"type": "string"},
+                    "covered_by": {"type": "string"},
+                    "note": {"type": "string"},
+                },
+                "required": ["point", "covered_by"],
+            },
+        },
+    },
+    "required": ["points"],
+}
+
 TERMS_PROMPT = """A Spanish speaker is learning English with Anki. Read the
 state of their collection and say what is worth making cards for next.
 {topic}{focus}
@@ -139,6 +166,60 @@ Rules:
 
 If there is genuinely nothing to go on — no failures and no holes — return an
 empty list rather than inventing work."""
+
+# Qué cuenta como "punto" cambia con la habilidad, y sin decirlo el modelo
+# devuelve gramática para las cinco: el primer Writing A1 probado vino con
+# "artículos a/an/the" y "plural de los sustantivos", que es el temario de
+# Grammar con otro nombre encima.
+SYLLABUS_POINT = {
+    "Grammar": "a structure or rule — \"artículos a/an/the\", \"there is / there are\"",
+    "Writing": "a kind of text they can produce, or a device it needs — "
+               "\"un email corto de trabajo\", \"conectores de adición\"",
+    "Speaking": "a situation they can handle, or the function it needs — "
+                "\"presentarse en una reunión\", \"pedir que repitan\"",
+    "Listening": "what they can follow and under what conditions — "
+                 "\"instrucciones cortas cara a cara\", \"números y horas\"",
+    "Reading": "a kind of text they can read, or the vocabulary field it needs — "
+               "\"señales y carteles\", \"vocabulario de oficina\"",
+}
+
+SYLLABUS_PROMPT = """A Spanish speaker is learning English with Anki. Name what
+{skill} at level {level} is made of, and say how much of it their collection
+already covers.
+
+The topics they have at this level, exactly as their decks are named:
+{topics}
+
+A sample of the cards those decks actually hold, because a deck called
+"Gramática en contexto" does not say what is inside it:
+{have}
+
+Return the points a course teaches at this level — the programme itself, not
+what this student happens to own.
+
+Rules:
+
+- At most {max_points} points, in the order they are normally taught.
+- A point is one teachable thing, and for {skill} that means {point_is}. Not
+  a whole area like "gramática básica", and not a single word.
+- Stay inside {skill}. The other four skills have their own syllabus and this
+  one is not a place to list grammar rules unless {skill} is Grammar.
+- `point`: its name **in Spanish**, three or four words.
+- `english`: the same point as a course would label it in English — "Articles",
+  "There is / there are". Empty when there is no natural label.
+- `covered_by`: the topic from the list above that already teaches this point,
+  copied **exactly** as it is written there. Empty when nothing covers it.
+- Judge coverage by the sample cards, never by the deck name. Seven decks all
+  drilling the present simple cover **one** point, not seven.
+- A point that is only half covered is not covered: leave `covered_by` empty
+  and say what is missing in `note`.
+- `note`: one short sentence **in Spanish**, addressed to the student, only
+  when there is something worth saying — what the gap costs them, or what the
+  deck that covers it still lacks. Empty otherwise. Never a scolding.
+
+Never invent coverage. Claiming a point is covered hides it from them; leaving
+it open only proposes work they can decline."""
+
 
 CARDS_PROMPT = """A Spanish speaker learning English wants cards for one term.
 
@@ -325,6 +406,64 @@ def propose_terms(stuck: list[dict], catalog: dict,
         terms.append({"term": term, "reason": str(item.get("reason", "")).strip()})
 
     return {"terms": terms, "topic": topic, "duration_ms": duration_ms}
+
+
+def propose_syllabus(skill: str, level: str, topics: list[str],
+                     have: list[str] | None = None) -> dict:
+    """The points that make up one level, and which of them the collection covers.
+
+    Maturity answers "do you remember your cards"; this answers "do your cards
+    cover the level", which is a different question and the one nothing in the
+    app could ask. A level of a single topic can reach `MATURITY_THRESHOLD` and
+    read as held while most of its programme was never studied.
+
+    Derived on every read, stored nowhere — the same rule the classification by
+    deck name already follows.
+    """
+    result, duration_ms = llm.generate(
+        SYLLABUS_PROMPT.format(
+            skill=skill,
+            level=level,
+            point_is=SYLLABUS_POINT.get(skill, "one teachable thing"),
+            max_points=MAX_SYLLABUS_POINTS,
+            topics="\n".join(f"  {t}" for t in topics) or "  (none yet)",
+            have="\n".join(f"  {line}" for line in (have or []))
+                 or "  (this level holds no cards at all)",
+        ),
+        SYLLABUS_SCHEMA,
+    )
+
+    known = {t.lower(): t for t in topics}
+    points: list[dict] = []
+    seen: set[str] = set()
+    for item in result.get("points", [])[:MAX_SYLLABUS_POINTS]:
+        name = " ".join(str(item.get("point", "")).split())[:80]
+        key = name.lower()
+        if not name or key in seen:
+            continue
+        seen.add(key)
+
+        # `covered_by` es lo único que el modelo afirma sobre la colección, y
+        # por lo tanto lo único que hay que verificar: sólo vale si nombra un
+        # mazo que existe de verdad. Cualquier otra cosa se lee como no
+        # cubierto, que es el lado seguro del error — un hueco de más propone
+        # trabajo que se puede rechazar, uno de menos lo esconde.
+        claimed = " ".join(str(item.get("covered_by", "")).split())
+        points.append({
+            "point": name,
+            "english": " ".join(str(item.get("english", "")).split())[:80],
+            "covered_by": known.get(claimed.lower(), ""),
+            "note": " ".join(str(item.get("note", "")).split())[:200],
+        })
+
+    return {
+        "skill": skill,
+        "level": level,
+        "points": points,
+        "covered": sum(1 for p in points if p["covered_by"]),
+        "total": len(points),
+        "duration_ms": duration_ms,
+    }
 
 
 # ── Everything below treats the model's answer as untrusted ───────────
