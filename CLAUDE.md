@@ -61,7 +61,9 @@ cases checked in seconds.
 | `POST /api/generate/terms` | What is worth studying next. An optional `{topic}` — whatever is in the box — is opened into its terms; without it, the stuck cards and the empty levels answer. An optional `{skill, level}` narrows either to one hole. **Writes nothing.** |
 | `POST /api/generate/cards` | Candidates for **one** term plus the deck they belong in. One term per request: each is its own 8–18 s `claude -p` call. **Writes nothing.** |
 | `POST /api/notes` | Creates the approved cards. Ensures the note type, then one `snapshot.add_notes` per deck. Reports what Anki refused and why, per card |
-| `POST /api/syllabus` | The points that make up one `{skill, level}`, and which of them the collection covers. The syllabus is **frozen** in `data/syllabus/` on first use — three drafts and a merge, ~100 s; `{regenerate: true}` redoes it. The coverage is derived on every read, ~40 s. **Writes nothing into Anki.** |
+| `GET /api/syllabus` | The frozen points of one `?skill=&level=`, read off disk. No model, no Anki, ~10 ms. `frozen: false` when that level has none yet — the first time is not an error. |
+| `POST /api/syllabus` | Freezes the syllabus of one `{skill, level}` in `data/syllabus/` — three drafts and a merge, ~100 s; `{regenerate: true}` redoes it. Already frozen, it returns what is there without calling the model. Does not touch Anki. |
+| `POST /api/syllabus/coverage` | Which of your decks covers each point. Reads the frozen list off disk, never from the request. ~40 s, on every read. **Writes nothing into Anki.** |
 | `POST /api/repair/{note_id}` | Asks the model for a better card. **Writes nothing.** |
 | `POST /api/apply/{note_id}` | Snapshots, then writes the approved fields |
 
@@ -260,7 +262,7 @@ seven decks — Present simple, its negatives, its questions, Verb to be,
 Questions with be, Short answers, Wh- questions — which is *one* point sliced
 seven ways. Twenty-four cards, and a level that would read as held at 60 %
 maturity with most of its programme never studied. That is the silent failure
-this app is built to avoid, so `POST /api/syllabus` asks the other question.
+this app is built to avoid, so the syllabus asks the other question.
 
 **Two halves of different natures, so they live differently.**
 
@@ -288,6 +290,15 @@ would be another sample of the same noise; it is the model measuring its own
 uncertainty, and it tells a person where to look. Seventeen of eighteen at 3/3
 is settled; a point at 1/3 is where your judgement is worth more than another
 call.
+**And two calls, not one.** They were a single request, and a level already
+frozen looked exactly like one generating from scratch: forty seconds of blank
+panel under a notice that said "the first time takes a couple of minutes".
+Nothing was being regenerated — the file's mtime never moved — but nothing on
+screen said so. Now `GET /api/syllabus` serves the frozen points in
+milliseconds and they paint immediately; the coverage arrives after and fills
+in the marks. Until it lands a point claims nothing — no mark, no "generar" —
+because "not covered" is a finding, and nobody had looked yet.
+
 
 **Asking a second model to audit it would not help.** `m98/fluent` was the
 candidate and it ships **no curriculum at all** — its level is a field the
@@ -576,9 +587,11 @@ created, two cards written, read back from Anki, and undone from the record.
 
 The syllabus reads on the five skill screens: one button per level panel,
 which names what that level is made of and marks what your decks already
-cover. Verified against the live collection — Grammar A1 froze at eighteen
-points, seventeen of them named by all three drafts; a hand edit to the file
-survives a reload and is reported as such.
+cover. The points appear at once and the coverage fills in behind them.
+Verified against the live collection — Grammar A1 froze at eighteen points,
+seventeen of them named by all three drafts; a hand edit to the file survives a
+reload and is reported as such; and reopening that level now costs 11 ms for
+the points and 27 s for the coverage, with the file untouched.
 
 Not built: rename/archive on Mazos and the exercise mode.
 

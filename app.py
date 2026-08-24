@@ -12,8 +12,9 @@ import llm
 import repair
 import snapshot
 import state
-# `syllabus` es también el nombre de la función que sirve el endpoint, y el
-# módulo se lee dentro de ella: sin alias, el nombre local la taparía.
+# Con alias: `syllabus` es el nombre de la mitad del app —el endpoint, la
+# pantalla, el archivo— y el módulo se lee dentro de las funciones que lo
+# sirven. Sin alias, cualquier nombre local lo taparía.
 import syllabus as syllabus_store
 
 app = FastAPI(title="claude-fluent")
@@ -246,19 +247,112 @@ def generate_terms(payload: dict | None = None) -> dict:
         raise HTTPException(502, f"claude -p failed: {e}") from e
 
 
+def _syllabus_body(stored: dict, points: list[dict] | None = None) -> dict:
+    """La forma que devuelven las tres llamadas del temario.
+
+    Leer, congelar y cubrir hablan del mismo objeto y la pantalla lo dibuja con
+    el mismo código; que una devuelva una clave distinta es exactamente cómo se
+    rompe. `covered` es `None` mientras la cobertura no se derivó — no es cero,
+    que querría decir "ningún punto cubierto", que es otra cosa.
+    """
+    skill, level = stored["skill"], stored["level"]
+    return {
+        "skill": skill,
+        "level": level,
+        "frozen": True,
+        "points": points if points is not None else stored["points"],
+        "covered": (sum(1 for p in points if p["covered_by"])
+                    if points is not None else None),
+        "total": len(stored["points"]),
+        "drafts": stored.get("drafts"),
+        "generated": stored.get("generated"),
+        "edited": stored.get("edited", False),
+        "path": str(syllabus_store.path_for(skill, level)),
+    }
+
+
+@app.get("/api/syllabus")
+def syllabus_frozen(skill: str = "", level: str = "") -> dict:
+    """El temario congelado de un nivel. Sin cobertura, sin modelo, sin Anki.
+
+    Es la mitad estable y está en disco, así que se sirve en milisegundos: la
+    pantalla pinta los puntos al instante y pide la cobertura después, que es
+    la que tarda. Antes las dos mitades viajaban en la misma llamada y un nivel
+    ya congelado se veía igual que uno generándose desde cero — cuarenta
+    segundos en blanco bajo un cartel que decía "la primera vez tarda un par de
+    minutos".
+
+    Un nivel sin temario contesta `frozen: false`, que no es un error: es la
+    primera vez, y quien pregunta necesita distinguirlas.
+    """
+    focus = generate.focus_for(skill, level)
+    if not focus:
+        raise HTTPException(400, "unknown skill or level")
+
+    stored = syllabus_store.load(focus["skill"], focus["level"])
+    if stored is None:
+        return {
+            "skill": focus["skill"],
+            "level": focus["level"],
+            "frozen": False,
+            "points": [],
+            "covered": None,
+            "total": 0,
+            "drafts": None,
+            "generated": None,
+            "edited": False,
+            "path": str(syllabus_store.path_for(focus["skill"], focus["level"])),
+        }
+    return _syllabus_body(stored)
+
+
 @app.post("/api/syllabus")
-def syllabus(payload: dict | None = None) -> dict:
-    """El temario de un nivel, y qué parte de él cubren tus mazos.
+def syllabus_freeze(payload: dict | None = None) -> dict:
+    """Congelar el temario de un nivel: tres borradores y una fusión, ~100 s.
 
-    Dos mitades de naturaleza distinta, y por eso viven distinto. **El
-    temario** —qué enseña un A1— es un hecho externo y estable: se genera una
-    vez, se congela en `data/syllabus/` y no se vuelve a tocar salvo que pidas
-    `{regenerate: true}`. **La cobertura** es un hecho sobre la colección y
-    cambia con cada tarjeta escrita, así que se deriva en cada lectura.
+    Sólo llama al modelo si ese nivel todavía no tiene temario, o si pediste
+    `{regenerate: true}`. Con uno congelado devuelve el que hay y no gasta una
+    llamada: la mitad estable se genera una vez en la vida del nivel.
 
-    La primera vez cuesta un par de minutos: tres borradores y una fusión, que
-    es lo que convierte tres muestras ruidosas en una lista estable. Después,
-    sólo la cobertura.
+    No toca Anki. Qué enseña un A1 es un hecho externo y no depende de tu
+    colección, así que esto funciona con Anki cerrado. **No escribe en Anki.**
+    """
+    focus = generate.focus_for(
+        (payload or {}).get("skill", ""), (payload or {}).get("level", ""))
+    if not focus:
+        raise HTTPException(400, "unknown skill or level")
+
+    skill, level = focus["skill"], focus["level"]
+    regenerate = bool((payload or {}).get("regenerate"))
+
+    stored = None if regenerate else syllabus_store.load(skill, level)
+    if stored is not None:
+        return _syllabus_body(stored)
+
+    try:
+        built = generate.build_syllabus(skill, level)
+    except llm.LLMError as e:
+        raise HTTPException(502, f"claude -p failed: {e}") from e
+    if not built["points"]:
+        raise HTTPException(502, "el modelo no devolvió ningún punto")
+
+    stored = syllabus_store.save(
+        skill, level, built["points"], built["drafts"],
+        datetime.now().isoformat(timespec="seconds"))
+    return _syllabus_body({**stored, "edited": False})
+
+
+@app.post("/api/syllabus/coverage")
+def syllabus_coverage(payload: dict | None = None) -> dict:
+    """Qué mazo de los tuyos cubre cada punto del temario. ~40 s.
+
+    Ésta es la mitad que sí se deriva en cada lectura: es un hecho sobre la
+    colección y cambia con cada tarjeta que escribís.
+
+    Los puntos se leen del disco y no del cuerpo del pedido. `generate.cover`
+    recorre la lista **congelada** para que un punto inventado quede fuera y
+    uno saltado aparezca igual, sin cubrir; esa garantía no vale nada si la
+    lista la manda quien llama. **No escribe nada.**
     """
     focus = generate.focus_for(
         (payload or {}).get("skill", ""), (payload or {}).get("level", ""))
@@ -269,49 +363,31 @@ def syllabus(payload: dict | None = None) -> dict:
         raise HTTPException(503, "AnkiConnect is not answering — is Anki running?")
 
     skill, level = focus["skill"], focus["level"]
-    regenerate = bool((payload or {}).get("regenerate"))
+    stored = syllabus_store.load(skill, level)
+    if stored is None:
+        raise HTTPException(409, "ese nivel todavía no tiene temario congelado")
 
-    stored = None if regenerate else syllabus_store.load(skill, level)
+    decks = _decks_at(_catalog(), focus)
+
+    # Repartida entre los mazos y no por mazo: siete mazos a sesenta frentes
+    # serían cuatrocientas líneas de prompt, y un tope por mazo dejaría al
+    # último sin una sola tarjeta a la vista — invisible es indistinguible de
+    # vacío, y se marcaría como no cubierto.
+    per_deck = max(4, FRONTS_FOR_PROMPT // max(1, len(decks)))
+    have: list[str] = []
+    for deck in decks:
+        topic = deck.split("::")[-1]
+        have += [f"{topic}: {front}"
+                 for front in anki.deck_fronts(deck, limit=per_deck)]
+
     try:
-        if stored is None:
-            built = generate.build_syllabus(skill, level)
-            if not built["points"]:
-                raise HTTPException(502, "el modelo no devolvió ningún punto")
-            stored = syllabus_store.save(
-                skill, level, built["points"], built["drafts"],
-                datetime.now().isoformat(timespec="seconds"))
-            stored = {**stored, "edited": False}
-
-        decks = _decks_at(_catalog(), focus)
-
-        # Repartida entre los mazos y no por mazo: siete mazos a sesenta
-        # frentes serían cuatrocientas líneas de prompt, y un tope por mazo
-        # dejaría al último sin una sola tarjeta a la vista — invisible es
-        # indistinguible de vacío, y se marcaría como no cubierto.
-        per_deck = max(4, FRONTS_FOR_PROMPT // max(1, len(decks)))
-        have: list[str] = []
-        for deck in decks:
-            topic = deck.split("::")[-1]
-            have += [f"{topic}: {front}"
-                     for front in anki.deck_fronts(deck, limit=per_deck)]
-
         points = generate.cover(
             skill, level, stored["points"],
             [d.split("::")[-1] for d in decks], have)
     except llm.LLMError as e:
         raise HTTPException(502, f"claude -p failed: {e}") from e
 
-    return {
-        "skill": skill,
-        "level": level,
-        "points": points,
-        "covered": sum(1 for p in points if p["covered_by"]),
-        "total": len(points),
-        "drafts": stored.get("drafts"),
-        "generated": stored.get("generated"),
-        "edited": stored.get("edited", False),
-        "path": str(syllabus_store.path_for(skill, level)),
-    }
+    return _syllabus_body(stored, points)
 
 
 @app.post("/api/generate/cards")

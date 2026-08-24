@@ -1304,6 +1304,10 @@ h2 .rail-chip { margin-left: var(--s2); }
   font-size: 11px;
   letter-spacing: 0.04em;
   color: var(--ink-4);
+/* Mientras la cobertura viaja, el punto no afirma nada todavía: el cuadradito
+   se insinúa en vez de dibujar el contorno de "esto te falta". */
+.point[data-covered="pending"] .point-title::before { border-color: var(--rule-faint); }
+
 }
 
 .point-note {

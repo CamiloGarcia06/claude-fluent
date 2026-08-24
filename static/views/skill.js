@@ -53,8 +53,13 @@ function deckRow(deck) {
 // una lista de mazos.
 
 function pointRow(point, data, skillName, levelName) {
+  // `covered === null` es la cobertura todavía en vuelo. No es "no cubierto":
+  // marcar el punto como hueco y ofrecer "generar" sería afirmar algo que
+  // nadie miró aún, y cuarenta segundos después se desdice solo.
+  const pending = data.covered === null;
+
   const li = el("li", "point");
-  li.dataset.covered = String(Boolean(point.covered_by));
+  li.dataset.covered = pending ? "pending" : String(Boolean(point.covered_by));
 
   const name = el("span", "name");
   const title = el("span", "point-title", point.point);
@@ -78,6 +83,8 @@ function pointRow(point, data, skillName, levelName) {
   name.append(title);
   if (point.note) name.append(el("span", "point-note", point.note));
   li.append(name);
+
+  if (pending) return li;
 
   if (point.covered_by) {
     li.append(el("span", "count", point.covered_by));
@@ -124,8 +131,9 @@ function renderSyllabus(box, data, skillName, levelName, onRegenerate) {
     return;
   }
 
-  box.append(el("p", "syllabus-note",
-    `${data.covered} de ${data.total} puntos cubiertos por tus mazos.`));
+  box.append(el("p", "syllabus-note", data.covered === null
+    ? "Comparando el temario con tus mazos… cerca de un minuto."
+    : `${data.covered} de ${data.total} puntos cubiertos por tus mazos.`));
 
   const list = el("ul", "rows");
   for (const point of data.points) {
@@ -135,31 +143,65 @@ function renderSyllabus(box, data, skillName, levelName, onRegenerate) {
 }
 
 async function loadSyllabus(button, box, skillName, levelName, regenerate = false) {
+  // Dos paneles pueden estar cargando a la vez y "Regenerar" puede pisar una
+  // cobertura en vuelo, así que cada corrida deja su número en el panel y sólo
+  // pinta si sigue siendo la última.
+  const ticket = String(Number(box.dataset.run || 0) + 1);
+  box.dataset.run = ticket;
+  const mine = () => box.dataset.run === ticket;
+
   button.disabled = true;
   box.hidden = false;
-  // La primera vez son tres borradores y una fusión; después, sólo la
-  // cobertura. Decir cuál de las dos está pasando es la diferencia entre
-  // esperar y creer que se colgó.
+
+  const again = () => loadSyllabus(button, box, skillName, levelName, true);
+  const post = (path, extra) => getJSON(path, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ skill: skillName, level: levelName, ...extra }),
+  });
+
   box.replaceChildren(el("p", "syllabus-note", regenerate
     ? "Generando el temario de nuevo: tres borradores y una fusión. Un par de minutos."
-    : "Leyendo el temario y comparándolo con tus mazos… la primera vez de un nivel tarda un par de minutos."));
+    : "Leyendo el temario…"));
+
+  let painted = false;
 
   try {
-    const data = await getJSON("/api/syllabus", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ skill: skillName, level: levelName, regenerate }),
-    });
-    renderSyllabus(box, data, skillName, levelName,
-      () => loadSyllabus(button, box, skillName, levelName, true));
+    // El temario está congelado en disco: llega en milisegundos y se pinta
+    // antes de pedir nada más. Al modelo sólo se lo llama si este nivel
+    // todavía no tiene temario —una vez en su vida— o si pediste regenerarlo.
+    let data = regenerate ? { frozen: false } : await getJSON(
+      `/api/syllabus?skill=${encodeURIComponent(skillName)}` +
+      `&level=${encodeURIComponent(levelName)}`);
+    if (!mine()) return;
+
+    if (!data.frozen) {
+      box.replaceChildren(el("p", "syllabus-note", regenerate
+        ? "Generando el temario de nuevo: tres borradores y una fusión. Un par de minutos."
+        : "Primera vez de este nivel: tres borradores y una fusión. Un par de minutos."));
+      data = await post("/api/syllabus", { regenerate });
+      if (!mine()) return;
+    }
+    renderSyllabus(box, data, skillName, levelName, again);
+    painted = true;
+
+    // Y recién ahora la mitad lenta. Cambia con cada tarjeta que escribís, así
+    // que se deriva siempre —pero con los puntos ya en pantalla, que es la
+    // diferencia entre esperar y creer que empezó de cero.
+    const covered = await post("/api/syllabus/coverage");
+    if (!mine()) return;
+    renderSyllabus(box, covered, skillName, levelName, again);
   } catch (error) {
     // El temario es un extra sobre una pantalla que ya sirve, así que su fallo
     // se queda dentro de su propio panel: no se tira al router ni borra la
-    // lista de mazos que está arriba.
-    box.replaceChildren(el("p", "syllabus-note", error.message));
+    // lista de mazos que está arriba. Y si los puntos ya están pintados, el
+    // aviso se agrega debajo: que se caiga la cobertura no es razón para
+    // borrar el temario, que se leyó bien.
+    if (!mine()) return;
+    const note = el("p", "syllabus-note", error.message);
+    if (painted) box.append(note); else box.replaceChildren(note);
   } finally {
-    button.disabled = false;
-    button.textContent = "Ver temario";
+    if (mine()) button.disabled = false;
   }
 }
 
