@@ -549,7 +549,10 @@ async function run() {
       const data = await getJSON("/api/generate/cards", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ term }),
+        // El foco viaja con cada término: si entraste por un hueco de
+        // Grammar A1, las tarjetas se archivan en A1 y no donde el modelo
+        // crea que se encuentra la palabra.
+        body: JSON.stringify({ term, ...(focus || {}) }),
       });
 
       // Un tema no es un término: el modelo lo dice y la nota explica qué

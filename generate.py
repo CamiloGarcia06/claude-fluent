@@ -280,7 +280,7 @@ Rules:
 CARDS_PROMPT = """A Spanish speaker learning English wants cards for one term.
 
 Term: {term}
-
+{focus}
 Their collection, so you can say where the cards belong:
 {levels}
 
@@ -340,6 +340,19 @@ modales", "phrasal verbs", "past tenses" — or is written in Spanish, return
 `not_a_term: true`, no candidates, and a `note` **in Spanish** of one sentence
 saying it is a tema and that "Proponer términos" lo abre en los términos que lo
 componen. A card whose front reads "verbos modales" teaches nothing."""
+
+
+# Venir de un nivel es una decisión ya tomada, no una pista. El modelo elige
+# dónde vive un término mirando el término, y desde `#/agregar/Grammar/A1` eso
+# devolvía mazos de A2 o de Writing: la razón por la que entraste —llenar ese
+# hueco— se perdía en silencio. La habilidad además decide la forma de la
+# tarjeta, así que decírsela no es sólo archivarla bien.
+CARDS_FOCUS = """
+These cards were asked for from **{skill} {level}** — that is the level being
+filled, and it is where they will be filed. Judge the card by that skill: for
+Grammar they are exercises, for anything else a vocabulary card. Name the
+`topic` inside it; the `skill` and `level` you return are ignored here.
+"""
 
 
 def _levels_block(catalog: dict) -> str:
@@ -666,12 +679,21 @@ def focus_for(skill: str, level: str) -> dict | None:
     return None
 
 
-def propose_cards(term: str, catalog: dict, count: int = 3) -> dict:
-    """Candidate cards for one term, plus the deck they belong in."""
+def propose_cards(term: str, catalog: dict, count: int = 3,
+                  focus: dict | None = None) -> dict:
+    """Candidate cards for one term, plus the deck they belong in.
+
+    With a `focus` — you came from a hole or from a point of some level's
+    syllabus — that level is not a suggestion: the cards are filed there and
+    the model only names the topic. Where a term is normally met is a good
+    answer to a question nobody asked; you clicked "generar" on **that** level.
+    The deck is still yours to change on the screen.
+    """
     term = term.strip()
     result, duration_ms = llm.generate(
         CARDS_PROMPT.format(
             term=term,
+            focus=CARDS_FOCUS.format(**focus) if focus else "",
             levels=_levels_block(catalog),
             decks=_decks_block(catalog),
             count=count,
@@ -681,7 +703,18 @@ def propose_cards(term: str, catalog: dict, count: int = 3) -> dict:
         CARDS_SCHEMA,
     )
 
-    deck = deck_for(result.get("skill"), result.get("level"), result.get("topic"))
+    proposed = deck_for(result.get("skill"), result.get("level"),
+                        result.get("topic"))
+    deck = proposed
+    rationale = str(result.get("deck_rationale", "")).strip()
+    if focus:
+        deck = deck_for(focus["skill"], focus["level"], result.get("topic"))
+        # Y se dice. Que el mazo no sea el que el modelo razonó y que la frase
+        # de abajo siga explicando otro es cómo una pantalla miente sin querer.
+        if proposed and deck and proposed != deck:
+            rationale = (f"Va a {focus['skill']} {focus['level']} porque lo "
+                         f"pediste desde ahí; el modelo lo habría puesto en "
+                         f"{proposed.rsplit('::', 1)[0].replace('::', ' ')}.")
     existing = set(
         d["deck"]
         for skill in catalog["skills"]
@@ -715,7 +748,7 @@ def propose_cards(term: str, catalog: dict, count: int = 3) -> dict:
         "note": str(result.get("note", "")).strip(),
         "deck": deck,
         "deck_exists": deck in existing if deck else False,
-        "deck_rationale": str(result.get("deck_rationale", "")).strip(),
+        "deck_rationale": rationale,
         "candidates": candidates,
         "duration_ms": duration_ms,
     }

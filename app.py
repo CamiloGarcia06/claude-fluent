@@ -397,6 +397,11 @@ def generate_cards(payload: dict) -> dict:
     One term per request on purpose: each is its own `claude -p` call of 8-15s,
     so the screen fills in as they land instead of staring at one long spinner,
     and a term that fails costs only itself.
+
+    An optional `{skill, level}` — the one Agregar was opened on — is where the
+    cards get filed, instead of the level the model judges the term to belong
+    to. Coming from a hole and being handed a deck of another level is losing
+    the reason you came.
     """
     if not anki.is_alive():
         raise HTTPException(503, "AnkiConnect is not answering — is Anki running?")
@@ -407,8 +412,11 @@ def generate_cards(payload: dict) -> dict:
     if len(term) > 80:
         raise HTTPException(400, "term too long")
 
+    focus = generate.focus_for(
+        payload.get("skill", ""), payload.get("level", ""))
+
     try:
-        return generate.propose_cards(term, _catalog())
+        return generate.propose_cards(term, _catalog(), focus=focus)
     except llm.LLMError as e:
         raise HTTPException(502, f"claude -p failed: {e}") from e
 

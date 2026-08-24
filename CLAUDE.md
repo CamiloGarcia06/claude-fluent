@@ -59,7 +59,7 @@ cases checked in seconds.
 | `POST /api/study` | Hands the session to Anki's reviewer. `?deck=` picks one; without it the busiest wins. 409 when nothing is due — including when the named deck has nothing. |
 | `POST /api/add-cards` | Opens Anki's Add dialog. The escape hatch at the foot of Agregar, not a screen's main action |
 | `POST /api/generate/terms` | What is worth studying next. An optional `{topic}` — whatever is in the box — is opened into its terms; without it, the stuck cards and the empty levels answer. An optional `{skill, level}` narrows either to one hole. **Writes nothing.** |
-| `POST /api/generate/cards` | Candidates for **one** term plus the deck they belong in. One term per request: each is its own 8–18 s `claude -p` call. **Writes nothing.** |
+| `POST /api/generate/cards` | Candidates for **one** term plus the deck they belong in. One term per request: each is its own 8–18 s `claude -p` call. An optional `{skill, level}` — the one Agregar was opened on — is where they get filed, and it decides the shape of the card. **Writes nothing.** |
 | `POST /api/notes` | Creates the approved cards. Ensures the note type, then one `snapshot.add_notes` per deck. Reports what Anki refused and why, per card |
 | `GET /api/syllabus` | The frozen points of one `?skill=&level=`, read off disk. No model, no Anki, ~10 ms. `frozen: false` when that level has none yet — the first time is not an error. |
 | `POST /api/syllabus` | Freezes the syllabus of one `{skill, level}` in `data/syllabus/` — three drafts and a merge, ~100 s; `{regenerate: true}` redoes it. Already frozen, it returns what is there without calling the model. Does not touch Anki. |
@@ -168,6 +168,17 @@ focus on a level that already has decks, `/api/generate/terms` reads up to 60
 of its existing cards and passes them in: the instruction is to name what is
 missing, never what is there. Without that the model proposes the cards you
 have been reviewing for months.
+
+**Where you came from decides the level, not the model.** With a focus —
+`#/agregar/Grammar/A1`, or "generar" on an uncovered point of a syllabus — the
+cards are filed at *that* level and the model only names the topic. It judges a
+term by where the term is normally met, which is a fine answer to a question
+nobody asked: `nevertheless` came back as Writing B2 while you were standing on
+the Grammar A1 hole you clicked to fill. And because the skill decides the
+shape, saying it is not only about filing: the same term returns three grammar
+exercises under a Grammar focus and a vocabulary pair without one. When the two
+disagree the rationale says so — "va a Grammar A1 porque lo pediste desde ahí;
+el modelo lo habría puesto en Grammar B2" — and the picker still moves it.
 
 **The deck is per term, and yours to change.** The model suggests one deck
 for each term — `put up with` is Grammar B1 and `nevertheless` is Writing B2,
