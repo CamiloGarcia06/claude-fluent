@@ -1,3 +1,11 @@
+/*!
+ * anime.js v4.5.0 — https://animejs.com
+ * Copyright (c) 2025 Julian Garnier — MIT License
+ * Full licence text alongside this file, in anime.LICENSE.md.
+ *
+ * Vendorizada, no traída de un CDN: el app es local y un módulo cuyo import
+ * falla se lleva el archivo entero por delante.
+ */
 /**
  * Bundled by jsDelivr using Rollup v4.62.2 and esbuild v0.28.1.
  * Original file: /npm/animejs@4.5.0/dist/modules/index.js

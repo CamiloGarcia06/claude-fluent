@@ -11,9 +11,22 @@ schedule or run reviews: it **syncs, analyses and generates cards.**
 - Anki + AnkiConnect at `http://127.0.0.1:8765` (Anki must be running)
 - FastAPI backend, also serves the frontend
 - Plain HTML/CSS/JS frontend, no framework, no build step
-- Animations with anime.js v4 from CDN
+- Animations with anime.js v4, **vendored** — the app is local-only and a
+  module whose import fails takes the whole file down with it
 - Card generation through `claude -p` on my subscription
-- Local state in `data/state.json`: sync cursor, diagnostics and change history only
+- Local state in `data/state.json`: the daily goal, and nothing else. It is
+  the only thing this app decides that Anki does not know
+
+## Run it
+
+```bash
+source .venv/bin/activate
+uvicorn app:app --reload      # http://localhost:8000
+```
+
+Anki must be running with the AnkiConnect add-on (code `2055492159`), or every
+endpoint that touches the collection fails. `GET /api/health` says so
+explicitly, and it is the first thing to check when anything looks wrong.
 
 ## Closed decisions — do not reopen
 
@@ -39,8 +52,20 @@ schedule or run reviews: it **syncs, analyses and generates cards.**
 
 ## Current status
 
-Phase 0. Nothing built yet.
-(Update this line after each phase.)
+Nine screens navigate: Hoy, Progreso, the five skill libraries, Mazos, Agregar,
+Atascos, Ajustes and Dashboard. Card generation works end to end — propose
+terms, three candidates each, edit in place, pick a deck, write with a creation
+record. The syllabus of a level reads on the skill screens: what the level is
+made of, and how much of it your decks cover.
+
+Not built: rename/archive on Mazos and the exercise mode.
+(Update this section after each phase.)
+
+## Licence
+
+MIT — see `LICENSE`. Two vendored third-party files keep their own: anime.js
+(MIT, `static/anime.LICENSE.md`) and Excalifont (SIL OFL 1.1,
+`static/fonts/OFL.txt`).
 
 ## Credits
 
