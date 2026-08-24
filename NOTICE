@@ -1,0 +1,16 @@
+claude-fluent — third-party notices
+
+The app itself is MIT, in `LICENSE`. Two files are vendored rather than
+fetched from a CDN — the app is local-only and a module whose import fails
+takes the whole file down with it — and they keep their own licences:
+
+anime.js v4.5.0
+  Copyright (c) 2025 Julian Garnier
+  MIT License — full text in `static/anime.LICENSE.md`
+  https://animejs.com
+
+Excalifont (Regular, subset)
+  Copyright (c) 2024 by Excalidraw. All rights reserved.
+  Designed by Your Own Font Foundry (Virgil) and Ján Filípek / DizajnDesign
+  SIL Open Font License 1.1 — full text in `static/fonts/OFL.txt`
+  Excalifont is a trademark of Excalidraw.

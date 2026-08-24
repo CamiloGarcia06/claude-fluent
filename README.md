@@ -63,9 +63,8 @@ Not built: rename/archive on Mazos and the exercise mode.
 
 ## Licence
 
-MIT — see `LICENSE`. Two vendored third-party files keep their own: anime.js
-(MIT, `static/anime.LICENSE.md`) and Excalifont (SIL OFL 1.1,
-`static/fonts/OFL.txt`).
+MIT — see `LICENSE`. Two vendored third-party files keep their own, listed in
+`NOTICE`: anime.js (MIT) and Excalifont (SIL OFL 1.1).
 
 ## Credits
 

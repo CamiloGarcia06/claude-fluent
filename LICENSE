@@ -19,13 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-Este repositorio incluye software de terceros bajo sus propias licencias, que
-no quedan cubiertas por la de arriba:
-
-- `static/anime.esm.js` — anime.js v4.5.0, © 2025 Julian Garnier, MIT.
-  Texto completo en `static/anime.LICENSE.md`.
-- `static/fonts/Excalifont-Regular.woff2` — Excalifont, © 2024 Excalidraw,
-  SIL Open Font License 1.1. Texto completo en `static/fonts/OFL.txt`.
