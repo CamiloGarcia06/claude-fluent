@@ -12,6 +12,9 @@ import llm
 import repair
 import snapshot
 import state
+# `syllabus` es también el nombre de la función que sirve el endpoint, y el
+# módulo se lee dentro de ella: sin alias, el nombre local la taparía.
+import syllabus as syllabus_store
 
 app = FastAPI(title="claude-fluent")
 
@@ -245,16 +248,17 @@ def generate_terms(payload: dict | None = None) -> dict:
 
 @app.post("/api/syllabus")
 def syllabus(payload: dict | None = None) -> dict:
-    """El temario de un nivel, y qué parte de él cubre la colección.
+    """El temario de un nivel, y qué parte de él cubren tus mazos.
 
-    La madurez responde "¿te acordás de tus tarjetas?"; esto responde "¿tus
-    tarjetas cubren el nivel?". Un nivel de un solo tema puede llegar al 60 %
-    de maduras y leerse como sostenido con la mitad del programa sin ver.
+    Dos mitades de naturaleza distinta, y por eso viven distinto. **El
+    temario** —qué enseña un A1— es un hecho externo y estable: se genera una
+    vez, se congela en `data/syllabus/` y no se vuelve a tocar salvo que pidas
+    `{regenerate: true}`. **La cobertura** es un hecho sobre la colección y
+    cambia con cada tarjeta escrita, así que se deriva en cada lectura.
 
-    Es una llamada a `claude -p` y la más lenta del app — medida en 60 s
-    contra Grammar A1, porque el prompt lleva una muestra de cada mazo del
-    nivel. Por eso es su propia petición y nunca parte de `/api/catalog`, que
-    se lee en cada navegación: el temario se pide cuando se quiere ver.
+    La primera vez cuesta un par de minutos: tres borradores y una fusión, que
+    es lo que convierte tres muestras ruidosas en una lista estable. Después,
+    sólo la cobertura.
     """
     focus = generate.focus_for(
         (payload or {}).get("skill", ""), (payload or {}).get("level", ""))
@@ -264,25 +268,50 @@ def syllabus(payload: dict | None = None) -> dict:
     if not anki.is_alive():
         raise HTTPException(503, "AnkiConnect is not answering — is Anki running?")
 
-    decks = _decks_at(_catalog(), focus)
+    skill, level = focus["skill"], focus["level"]
+    regenerate = bool((payload or {}).get("regenerate"))
 
-    # Repartido entre los mazos y no por mazo: siete mazos a sesenta frentes
-    # serían cuatrocientas líneas de prompt, y un tope por mazo dejaría al
-    # último sin una sola tarjeta a la vista — invisible es indistinguible de
-    # vacío, y el modelo lo marcaría como no cubierto.
-    per_deck = max(4, FRONTS_FOR_PROMPT // max(1, len(decks)))
-    have: list[str] = []
-    for deck in decks:
-        topic = deck.split("::")[-1]
-        have += [f"{topic}: {front}"
-                 for front in anki.deck_fronts(deck, limit=per_deck)]
-
+    stored = None if regenerate else syllabus_store.load(skill, level)
     try:
-        return generate.propose_syllabus(
-            focus["skill"], focus["level"],
+        if stored is None:
+            built = generate.build_syllabus(skill, level)
+            if not built["points"]:
+                raise HTTPException(502, "el modelo no devolvió ningún punto")
+            stored = syllabus_store.save(
+                skill, level, built["points"], built["drafts"],
+                datetime.now().isoformat(timespec="seconds"))
+            stored = {**stored, "edited": False}
+
+        decks = _decks_at(_catalog(), focus)
+
+        # Repartida entre los mazos y no por mazo: siete mazos a sesenta
+        # frentes serían cuatrocientas líneas de prompt, y un tope por mazo
+        # dejaría al último sin una sola tarjeta a la vista — invisible es
+        # indistinguible de vacío, y se marcaría como no cubierto.
+        per_deck = max(4, FRONTS_FOR_PROMPT // max(1, len(decks)))
+        have: list[str] = []
+        for deck in decks:
+            topic = deck.split("::")[-1]
+            have += [f"{topic}: {front}"
+                     for front in anki.deck_fronts(deck, limit=per_deck)]
+
+        points = generate.cover(
+            skill, level, stored["points"],
             [d.split("::")[-1] for d in decks], have)
     except llm.LLMError as e:
         raise HTTPException(502, f"claude -p failed: {e}") from e
+
+    return {
+        "skill": skill,
+        "level": level,
+        "points": points,
+        "covered": sum(1 for p in points if p["covered_by"]),
+        "total": len(points),
+        "drafts": stored.get("drafts"),
+        "generated": stored.get("generated"),
+        "edited": stored.get("edited", False),
+        "path": str(syllabus_store.path_for(skill, level)),
+    }
 
 
 @app.post("/api/generate/cards")

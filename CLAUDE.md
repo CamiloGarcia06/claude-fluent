@@ -27,6 +27,7 @@ looks normal while it lies to you.
 | `anki.py` | AnkiConnect client. `call(action, **params)` and the helpers over it. Owns the write guard. |
 | `analysis.py` | **Pure functions** over a list of reviews. No I/O, no clock — every function takes its data and its reference date, so it is testable without Anki. |
 | `snapshot.py` | **The only write path into Anki.** Records the previous state, then holds the lock while the write happens. |
+| `syllabus.py` | `data/syllabus/*.json`: el temario congelado de cada nivel. Se genera una vez y es tuyo para editar; nada lo reescribe salvo que pidas regenerar. |
 | `state.py` | `data/state.json`: lo único que decide el app y Anki no sabe. Hoy, la meta diaria. |
 | `repair.py` | Prompt and schema for rewriting a stuck card. Proposes only, never writes. |
 | `generate.py` | Prompts, schemas and the note type for card generation. Proposes only. Everything the model returns is treated as untrusted: the skill and the level must be ones this app knows, and the topic is scrubbed. |
@@ -60,7 +61,7 @@ cases checked in seconds.
 | `POST /api/generate/terms` | What is worth studying next. An optional `{topic}` — whatever is in the box — is opened into its terms; without it, the stuck cards and the empty levels answer. An optional `{skill, level}` narrows either to one hole. **Writes nothing.** |
 | `POST /api/generate/cards` | Candidates for **one** term plus the deck they belong in. One term per request: each is its own 8–18 s `claude -p` call. **Writes nothing.** |
 | `POST /api/notes` | Creates the approved cards. Ensures the note type, then one `snapshot.add_notes` per deck. Reports what Anki refused and why, per card |
-| `POST /api/syllabus` | The points that make up one `{skill, level}`, and which of them the collection covers. Derived on every read, stored nowhere. The slowest call in the app — 60 s on a level that already has decks. **Writes nothing.** |
+| `POST /api/syllabus` | The points that make up one `{skill, level}`, and which of them the collection covers. The syllabus is **frozen** in `data/syllabus/` on first use — three drafts and a merge, ~100 s; `{regenerate: true}` redoes it. The coverage is derived on every read, ~40 s. **Writes nothing into Anki.** |
 | `POST /api/repair/{note_id}` | Asks the model for a better card. **Writes nothing.** |
 | `POST /api/apply/{note_id}` | Snapshots, then writes the approved fields |
 
@@ -261,22 +262,61 @@ seven ways. Twenty-four cards, and a level that would read as held at 60 %
 maturity with most of its programme never studied. That is the silent failure
 this app is built to avoid, so `POST /api/syllabus` asks the other question.
 
-**The syllabus is derived, never stored.** What an A1 of grammar teaches is a
-public, stable fact and the model knows it; a `syllabus.json` on disk would be
-a second database beside the deck names, and the copy is always the one that
-drifts. Same rule as the classification: nothing on disk, re-read every time.
+**Two halves of different natures, so they live differently.**
+
+| | What it is | How it lives |
+|---|---|---|
+| The syllabus | an external, stable fact — what an A1 teaches | generated **once**, frozen in `data/syllabus/`, yours to edit |
+| The coverage | a fact about the collection, volatile | derived on every read |
+
+**Deriving the syllabus every time was the first attempt and it does not
+work.** Two runs over Grammar A1, minutes apart with nothing touched, returned
+7/14 and 3/14. A figure that moves on its own is not a diagnosis — you cannot
+tell "I covered two more points" from "the model counted differently".
+
+**Measured, the disagreement is about granularity, not content.** Three drafts
+of Grammar A1 shared eleven of eighteen points outright; most of the rest were
+the same point split more finely — "Presente simple afirmativo" against
+"Presente simple". And splitting more finely is exactly what moves the count,
+since each point then covers less. So the fix is not a better prompt: it is to
+stop asking twice.
+
+**Three drafts and a merge, once.** `generate.build_syllabus` samples the level
+`SYLLABUS_DRAFTS` times and folds the drafts into one list, each point carrying
+`drafts` — how many named it. That is not the model checking itself, which
+would be another sample of the same noise; it is the model measuring its own
+uncertainty, and it tells a person where to look. Seventeen of eighteen at 3/3
+is settled; a point at 1/3 is where your judgement is worth more than another
+call.
+
+**Asking a second model to audit it would not help.** `m98/fluent` was the
+candidate and it ships **no curriculum at all** — its level is a field the
+learner types, or a five-question quiz mapped to a band. Running the syllabus
+past it is the same model wearing different markdown. A real external anchor
+exists — Cambridge's English Grammar Profile, ~1,200 grammar points tagged by
+CEFR over a learner corpus — and it is a separate project, not a prompt.
+
+**The point of freezing is that the syllabus becomes yours.** It was the one
+place in this app where the model decided and you did not get a say, which
+contradicts everything else here. The files are plain JSON on purpose: delete a
+point you do not care about, add the one your job needs, reorder them. Nothing
+rewrites them. `syllabus.load` re-reads with the same distrust it wrote with —
+a broken entry is dropped, not fatal — and compares mtime against `generated`
+so a hand-edited syllabus says so, and "Regenerar" warns before overwriting
+work that has no undo.
 
 **Only `covered_by` is a claim about the collection, so it is the only thing
-verified.** The model is handed the topics of that level and a sample of the
-cards inside them, and returns the topic that already teaches each point.
-`generate.propose_syllabus` accepts it only if it names a topic that really
-exists; anything else is read as not covered. That is the safe side of the
-error — a gap too many proposes work you can decline, a gap too few hides it.
+verified.** The coverage call receives the frozen points and returns them with
+the deck that teaches each; `generate.cover` walks the **frozen** list and
+indexes the answer by name, so a point the model invented is dropped and one it
+skipped still appears, uncovered. A topic it names is accepted only if it
+really exists. That is the safe side of the error — a gap too many proposes
+work you can decline, a gap too few hides it.
 
-**The sample is spread across the decks, not taken per deck.** Seven decks at
-sixty fronts each would be four hundred lines of prompt, and a per-deck cap
-would leave the last decks with nothing visible — invisible is indistinguishable
-from empty, and the model would mark them uncovered.
+**The card sample is spread across the decks, not taken per deck.** Seven decks
+at sixty fronts each would be four hundred lines of prompt, and a per-deck cap
+would leave the last decks with nothing visible — invisible is
+indistinguishable from empty, and the model would mark them uncovered.
 
 **What counts as a point depends on the skill.** Without saying so the model
 returns grammar for all five: the first Writing A1 tried came back with
@@ -532,8 +572,9 @@ created, two cards written, read back from Anki, and undone from the record.
 
 The syllabus reads on the five skill screens: one button per level panel,
 which names what that level is made of and marks what your decks already
-cover. Verified against the live collection — Grammar A1 came back 7 of 14,
-and the seven it credits are all the same point sliced into seven decks.
+cover. Verified against the live collection — Grammar A1 froze at eighteen
+points, seventeen of them named by all three drafts; a hand edit to the file
+survives a reload and is reported as such.
 
 Not built: rename/archive on Mazos and the exercise mode.
 

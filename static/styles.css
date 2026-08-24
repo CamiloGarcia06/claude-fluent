@@ -1312,6 +1312,32 @@ h2 .rail-chip { margin-left: var(--s2); }
   padding-left: calc(9px + var(--s2) + 2px);
 }
 
+/* El acuerdo entre borradores: una marca por borrador, llena si nombró el
+   punto. Misma gramática que el riel y el calendario —tinta para lo que hay,
+   papel para lo que no— y por eso sin color: no es una alarma, es dónde
+   mirar. */
+.point-drafts {
+  flex: none;
+  display: inline-flex;
+  gap: 2px;
+  align-self: center;
+}
+.point-drafts span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--rule);
+}
+.point-drafts span[data-on="true"] { background: var(--ink-4); }
+
+.syllabus-note {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+.syllabus-again { flex: none; padding: var(--s1) var(--s2); font-size: 12px; }
+
 .point a.count { color: var(--ink-3); text-decoration: none; }
 .point a.count:hover { color: var(--ink); text-decoration: underline; }
 

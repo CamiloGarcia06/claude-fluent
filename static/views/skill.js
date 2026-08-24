@@ -52,13 +52,29 @@ function deckRow(deck) {
 // minuto cuando el nivel ya tiene mazos, y nadie quiere esperarla para leer
 // una lista de mazos.
 
-function pointRow(point, skillName, levelName) {
+function pointRow(point, data, skillName, levelName) {
   const li = el("li", "point");
   li.dataset.covered = String(Boolean(point.covered_by));
 
   const name = el("span", "name");
   const title = el("span", "point-title", point.point);
   if (point.english) title.append(el("span", "point-en", point.english));
+
+  // El acuerdo entre borradores es dónde mirar, no una nota: tres de tres es
+  // el modelo seguro, uno de tres es el modelo dudando y ahí decidís vos. Un
+  // punto que escribiste a mano no tiene acuerdo que mostrar, y es correcto:
+  // no salió de ningún borrador.
+  if (point.drafts && data.drafts) {
+    const mark = el("span", "point-drafts");
+    for (let i = 1; i <= data.drafts; i += 1) {
+      const dot = el("span");
+      dot.dataset.on = String(i <= point.drafts);
+      mark.append(dot);
+    }
+    mark.title = `${point.drafts} de ${data.drafts} borradores nombraron este punto`;
+    title.append(mark);
+  }
+
   name.append(title);
   if (point.note) name.append(el("span", "point-note", point.note));
   li.append(name);
@@ -77,7 +93,30 @@ function pointRow(point, skillName, levelName) {
   return li;
 }
 
-function renderSyllabus(box, data, skillName, levelName) {
+function syllabusFoot(data, onRegenerate) {
+  const foot = el("p", "syllabus-note");
+  const when = (data.generated || "").slice(0, 10);
+  foot.append(el("span", null, data.edited
+    ? `Temario editado a mano. Generado el ${when} con ${data.drafts} borradores.`
+    : `Temario congelado el ${when}, de ${data.drafts} borradores. ` +
+      `Editalo en data/syllabus/.`));
+
+  const again = el("button", "ghost syllabus-again", "Regenerar");
+  again.type = "button";
+  again.addEventListener("click", () => {
+    // Regenerar pisa el archivo, y si lo editaste ese trabajo no vuelve. Es la
+    // única acción destructiva de esta pantalla, así que pregunta — y sólo
+    // cuando hay algo que perder.
+    const lost = data.edited
+      ? "Editaste este temario a mano. Regenerarlo pisa esos cambios y no hay vuelta atrás. ¿Seguimos?"
+      : "Volver a generar el temario tarda un par de minutos. ¿Seguimos?";
+    if (window.confirm(lost)) onRegenerate();
+  });
+  foot.append(again);
+  return foot;
+}
+
+function renderSyllabus(box, data, skillName, levelName, onRegenerate) {
   box.replaceChildren();
 
   if (!data.points.length) {
@@ -90,24 +129,29 @@ function renderSyllabus(box, data, skillName, levelName) {
 
   const list = el("ul", "rows");
   for (const point of data.points) {
-    list.append(pointRow(point, skillName, levelName));
+    list.append(pointRow(point, data, skillName, levelName));
   }
-  box.append(list);
+  box.append(list, syllabusFoot(data, onRegenerate));
 }
 
-async function loadSyllabus(button, box, skillName, levelName) {
+async function loadSyllabus(button, box, skillName, levelName, regenerate = false) {
   button.disabled = true;
   box.hidden = false;
-  box.replaceChildren(el("p", "syllabus-note",
-    "Leyendo el temario y comparándolo con tus mazos… tarda cerca de un minuto."));
+  // La primera vez son tres borradores y una fusión; después, sólo la
+  // cobertura. Decir cuál de las dos está pasando es la diferencia entre
+  // esperar y creer que se colgó.
+  box.replaceChildren(el("p", "syllabus-note", regenerate
+    ? "Generando el temario de nuevo: tres borradores y una fusión. Un par de minutos."
+    : "Leyendo el temario y comparándolo con tus mazos… la primera vez de un nivel tarda un par de minutos."));
 
   try {
     const data = await getJSON("/api/syllabus", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ skill: skillName, level: levelName }),
+      body: JSON.stringify({ skill: skillName, level: levelName, regenerate }),
     });
-    renderSyllabus(box, data, skillName, levelName);
+    renderSyllabus(box, data, skillName, levelName,
+      () => loadSyllabus(button, box, skillName, levelName, true));
   } catch (error) {
     // El temario es un extra sobre una pantalla que ya sirve, así que su fallo
     // se queda dentro de su propio panel: no se tira al router ni borra la
@@ -115,7 +159,7 @@ async function loadSyllabus(button, box, skillName, levelName) {
     box.replaceChildren(el("p", "syllabus-note", error.message));
   } finally {
     button.disabled = false;
-    button.textContent = "Volver a leer el temario";
+    button.textContent = "Ver temario";
   }
 }
 
