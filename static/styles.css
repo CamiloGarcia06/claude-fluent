@@ -1122,6 +1122,11 @@ h2 .rail-chip { margin-left: var(--s2); }
 }
 .cand-edit:hover { color: var(--ink); text-decoration: underline; }
 
+/* "todas" es una acción, no un estado: mismo gesto tenue que "editar", y sin
+   el azul, que en este app quiere decir la acción primaria y el aquí y ahora. */
+.cand-pick { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; }
+.cand-pick:disabled { opacity: 0.4; cursor: default; text-decoration: none; }
+
 .cand-input {
   width: 100%;
   font: 400 15px/1.4 var(--font);
@@ -1299,15 +1304,15 @@ h2 .rail-chip { margin-left: var(--s2); }
   border-color: var(--ink-2);
 }
 
+/* Mientras la cobertura viaja, el punto no afirma nada todavía: el cuadradito
+   se insinúa en vez de dibujar el contorno de "esto te falta". */
+.point[data-covered="pending"] .point-title::before { border-color: var(--rule-faint); }
+
 .point-en {
   font-family: var(--mono);
   font-size: 11px;
   letter-spacing: 0.04em;
   color: var(--ink-4);
-/* Mientras la cobertura viaja, el punto no afirma nada todavía: el cuadradito
-   se insinúa en vez de dibujar el contorno de "esto te falta". */
-.point[data-covered="pending"] .point-title::before { border-color: var(--rule-faint); }
-
 }
 
 .point-note {

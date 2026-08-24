@@ -201,6 +201,14 @@ senses of `nevertheless` share a front and are three real cards. The screen has
 already greyed anything whose front is in the collection; Anki's duplicate
 warning is its own UI's concern, not a veto over a card you approved.
 
+**Ticking one by one was the only way in, and thirty cards is thirty
+clicks.** Three candidates of one term usually go together or not at all —
+three senses of the same word, or the three exercises on one grammar point — so
+each term has its own "todas", and the header checkbox covers the whole run. The
+three controls hold no state of their own: they re-read the selection every
+time, so ticking one card by hand leaves its term's button reading "todas" and
+the header half-drawn, which is what tells "none" apart from "some".
+
 **Duplicates are shown, never hidden.** `anki.existing_with_front()` searches
 the whole collection, not just the note type being written, because Anki's own
 duplicate check only looks inside one note type and would miss every Basic card
@@ -282,6 +290,15 @@ this app is built to avoid, so the syllabus asks the other question.
 | The syllabus | an external, stable fact — what an A1 teaches | generated **once**, frozen in `data/syllabus/`, yours to edit |
 | The coverage | a fact about the collection, volatile | derived on every read |
 
+**And two calls, not one.** They were a single request, and a level already
+frozen looked exactly like one generating from scratch: forty seconds of blank
+panel under a notice that said "the first time takes a couple of minutes".
+Nothing was being regenerated — the file's mtime never moved — but nothing on
+screen said so. Now `GET /api/syllabus` serves the frozen points in
+milliseconds and they paint immediately; the coverage arrives after and fills
+in the marks. Until it lands a point claims nothing — no mark, no "generar" —
+because "not covered" is a finding, and nobody had looked yet.
+
 **Deriving the syllabus every time was the first attempt and it does not
 work.** Two runs over Grammar A1, minutes apart with nothing touched, returned
 7/14 and 3/14. A figure that moves on its own is not a diagnosis — you cannot
@@ -301,15 +318,6 @@ would be another sample of the same noise; it is the model measuring its own
 uncertainty, and it tells a person where to look. Seventeen of eighteen at 3/3
 is settled; a point at 1/3 is where your judgement is worth more than another
 call.
-**And two calls, not one.** They were a single request, and a level already
-frozen looked exactly like one generating from scratch: forty seconds of blank
-panel under a notice that said "the first time takes a couple of minutes".
-Nothing was being regenerated — the file's mtime never moved — but nothing on
-screen said so. Now `GET /api/syllabus` serves the frozen points in
-milliseconds and they paint immediately; the coverage arrives after and fills
-in the marks. Until it lands a point claims nothing — no mark, no "generar" —
-because "not covered" is a finding, and nobody had looked yet.
-
 
 **Asking a second model to audit it would not help.** `m98/fluent` was the
 candidate and it ships **no curriculum at all** — its level is a field the
@@ -440,7 +448,12 @@ No framework, no build step, no npm. Save a file, reload the browser.
 - **Nothing generated is ticked by default.** Every card is a decision. The
   model proposing thirty cards and a single "aceptar todo" is how a collection
   fills with cards nobody chose. Editing notes
-  has no undo.
+  has no undo. Ticking **in bulk** is allowed, and is not the same thing: the
+  header checkbox and each term's "todas" are actions you take with the table
+  in front of you, after the cards are on screen. Neither ever ticks a card
+  already in the collection — "ya la tenés" stays grey and unticked, or the
+  shortcut would write cards you did not choose, which is the thing the rule
+  exists to stop.
 - **The model proposes, I approve.** Never write to the collection automatically.
 
 ## Working rules

@@ -345,6 +345,51 @@ function showRow(row, candidate) {
   if (edit) edit.textContent = "editar";
 }
 
+// ── Tildar en bloque ──────────────────────────────────────────────────
+// Nada sigue viniendo tildado de fábrica: esto no tilda solo, es una acción
+// que tomás vos con la tabla delante. Y no toca una duplicada nunca: "ya la
+// tenés" está gris por una razón, y un "todas" que la incluyera escribiría
+// tarjetas que no elegiste, que es exactamente lo que hay que evitar.
+const boxes = new Map();   // candidata → su casilla
+const picks = new Map();   // término → su botón "todas"
+let master = null;         // la casilla de la cabecera
+
+function writable(list) {
+  return list.filter((c) => !c.duplicate_in);
+}
+
+function setSelection(list, on) {
+  for (const candidate of writable(list)) {
+    candidate.selected = on;
+    const box = boxes.get(candidate);
+    if (box) box.checked = on;
+  }
+  refreshFoot();
+}
+
+function everyCandidate() {
+  return results.flatMap((r) => r.candidates);
+}
+
+// Los tres controles dicen lo mismo desde tres alturas, así que se releen de
+// la selección en vez de recordar su propio estado: tildar una a mano deja el
+// botón del término en "todas" y la cabecera a medias, sola.
+function syncBulk() {
+  for (const [result, button] of picks) {
+    const list = writable(result.candidates);
+    button.disabled = list.length === 0;
+    button.textContent = list.length && list.every((c) => c.selected)
+      ? "ninguna" : "todas";
+  }
+
+  if (!master) return;
+  const list = writable(everyCandidate());
+  const on = list.filter((c) => c.selected).length;
+  master.disabled = list.length === 0;
+  master.checked = list.length > 0 && on === list.length;
+  master.indeterminate = on > 0 && on < list.length;
+}
+
 function candidateRow(candidate) {
   const row = el("div", "cand-row");
   row.dataset.dup = String(Boolean(candidate.duplicate_in));
@@ -354,6 +399,7 @@ function candidateRow(candidate) {
   box.className = "cand-box";
   box.checked = Boolean(candidate.selected);   // nada viene tildado de fábrica
   box.disabled = Boolean(candidate.duplicate_in);
+  boxes.set(candidate, box);
   box.addEventListener("change", () => {
     candidate.selected = box.checked;
     refreshFoot();
@@ -385,8 +431,18 @@ function groupRow(result) {
   const count = el("span", "rail-chip",
     plural(result.candidates.length, "candidata", "candidatas"));
 
+  // Tres candidatas de un mismo término suelen ir juntas o no ir: son tres
+  // sentidos de la misma palabra, o los tres ejercicios de un mismo punto.
+  const pick = el("button", "cand-edit cand-pick", "todas");
+  pick.type = "button";
+  pick.addEventListener("click", () => {
+    const list = writable(result.candidates);
+    setSelection(result.candidates, !(list.length && list.every((c) => c.selected)));
+  });
+  picks.set(result, pick);
+
   const head = el("div", "cand-group-head");
-  head.append(title, count, deckPicker(result, group));
+  head.append(title, count, pick, deckPicker(result, group));
   group.append(head);
 
   if (result.deck_rationale) {
@@ -405,13 +461,25 @@ function renderNotes() {
 function paintResults() {
   const table = $("cands");
   table.replaceChildren();
+  boxes.clear();
+  picks.clear();
+  master = null;
 
   const live = results.filter((r) => r.candidates.length);
   $("results-panel").hidden = live.length === 0;
   if (!live.length) { refreshFoot(); return; }
 
+  // La casilla de la cabecera: la columna ya está ahí y es donde se la busca.
+  // A medias se dibuja a medias, que es lo que distingue "ninguna" de "algunas".
+  master = el("input");
+  master.type = "checkbox";
+  master.className = "cand-box";
+  master.title = "Tildar todas las que se pueden escribir";
+  master.addEventListener("change",
+    () => setSelection(everyCandidate(), master.checked));
+
   const header = el("div", "cand-row cand-head");
-  header.append(el("span"), el("div", "cand-front", "FRONT"),
+  header.append(master, el("div", "cand-front", "FRONT"),
                 el("div", "cand-back", "BACK"), el("div", "cand-example", "EJEMPLO"),
                 el("span"));
   table.append(header);
@@ -453,6 +521,8 @@ function refreshFoot() {
     hint(`Elegí un mazo para ${orphans.map((r) => r.term).join(", ")}: ` +
          `sin mazo no hay dónde escribir.`);
   }
+
+  syncBulk();
 
   $("add-selected").disabled = chosen.length === 0;
   $("add-selected").textContent = chosen.length
