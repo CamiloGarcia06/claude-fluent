@@ -30,6 +30,8 @@ looks normal while it lies to you.
 | `syllabus.py` | `data/syllabus/*.json`: el temario congelado de cada nivel. Se genera una vez y es tuyo para editar; nada lo reescribe salvo que pidas regenerar. |
 | `state.py` | `data/state.json`: lo único que decide el app y Anki no sabe. Hoy, la meta diaria. |
 | `repair.py` | Prompt and schema for rewriting a stuck card. Proposes only, never writes. |
+| `coach.py` | La práctica de escritura: prompts, schemas, el catálogo cerrado de patrones de error y el parseo desconfiado. **Cero disco y cero Anki** — por eso `_clean` y `_canonical` están copiadas de `generate.py` en vez de importadas: `generate` arrastra `anki`. |
+| `practice.py` | `data/practice/`: las sesiones de escritura y el conteo de patrones. El molde es `syllabus.py`. Cero modelo. |
 | `generate.py` | Prompts, schemas and the note type for card generation. Proposes only. Everything the model returns is treated as untrusted: the skill and the level must be ones this app knows, and the topic is scrubbed. |
 | `llm.py` | `claude -p` wrapper. Checks `is_error` on stdout, never uses `--bare`. |
 | `seed_cards.py` | Development fixture, not part of the app. Creates deliberately defective cards in `claude-fluent-test`. |
@@ -40,6 +42,8 @@ looks normal while it lies to you.
 | `static/router.js` | Hash routing. Mounts a view into `#view` and marks the nav. |
 | `static/ui.js` | Shared helpers: `$`, `el`, formatting, rows, `getJSON`, the catalogue cache. |
 | `static/repair.js` | The repair panel, shared by Hoy and Atascos. |
+| `static/views/practice.js` | La práctica de escritura. El único módulo del front con un listener de teclado. |
+| `static/views/patterns.js` | En qué venís fallando al escribir y cuántas sesiones seguidas. La hermana de Atascos: aquélla mira las tarjetas que no te acordás, ésta lo que producís. |
 | `static/views/*.js` | One module per screen, each exporting `render(root, params)` and carrying its own markup. |
 
 **`app.py` fetches, `analysis.py` computes.** Never put an AnkiConnect call
@@ -64,6 +68,10 @@ cases checked in seconds.
 | `GET /api/syllabus` | The frozen points of one `?skill=&level=`, read off disk. No model, no Anki, ~10 ms. `frozen: false` when that level has none yet — the first time is not an error. |
 | `POST /api/syllabus` | Freezes the syllabus of one `{skill, level}` in `data/syllabus/` — three drafts and a merge, ~100 s; `{regenerate: true}` redoes it. Already frozen, it returns what is there without calling the model. Does not touch Anki. |
 | `POST /api/syllabus/coverage` | Which of your decks covers each point. Reads the frozen list off disk, never from the request. ~40 s, on every read. **Writes nothing into Anki.** |
+| `GET · POST /api/practice/session` | La sesión de escritura abierta, **la última cerrada con análisis** y **los temas de tus últimas sesiones**, o abrir una sobre un tema. `last` viaja entera para que releer el análisis no cueste otra petición. El POST **no llama al modelo**: el saludo lo compone el app, porque quince segundos de espera antes de escribir la primera palabra es donde se abandona. `409` si ya hay una abierta y no viene `restart`. |
+| `POST /api/practice/turn` | Un mensaje tuyo → respuesta y correcciones. **Una sola llamada**, 13–21 s medidos. Persiste tu texto antes de llamar al modelo y lo reescribe cuando aterriza. `retry_index` reintenta un turno colgado en su mismo lugar. **No toca Anki.** |
+| `POST /api/practice/close` | Lee la sesión entera de una vez, ~30–35 s. El **único** que escribe `patterns.json`. Devuelve el análisis, lo que contó y lo que llegó al umbral. |
+| `GET · POST /api/practice/patterns` | El conteo de patrones. El POST marca uno como `carded` o `reset` para que deje de reclamarte la misma tarjeta. |
 | `POST /api/repair/{note_id}` | Asks the model for a better card. **Writes nothing.** |
 | `POST /api/apply/{note_id}` | Snapshots, then writes the approved fields |
 
@@ -359,14 +367,236 @@ An uncovered point carries into `#/agregar/<skill>/<level>/<topic>`, which
 writes it into the box — and the box is the question, so the terms proposed are
 the ones that point is made of.
 
+## La práctica de escritura
+
+Writing tenía pantalla desde el principio y **cero tarjetas en los cinco
+niveles**: el único mazo era un `Writing::B2` vacío. Era un diagnóstico de mazos
+que no existían. `#/practica/writing` es el modo ejercicio que faltaba, y lo que
+va a llenar esa habilidad: conversás en inglés sobre lo que elijas, te corrige
+mientras escribís, y **lo que fallás tres veces se vuelve tarjeta**.
+
+La metodología viene de `m98/fluent`, pero **sólo la mitad que este proyecto no
+tenía**. Se toma: comunicación primero — *"a clear message with a missed article
+scores better than a grammatically perfect but confusing answer"*—, el tope de
+correcciones por turno — *"a session with 20 red marks kills confidence"*—,
+explicar el porqué y nombrar el patrón para que generalices, la alternativa
+natural, y el análisis consolidado al cerrar. Se descarta: SM-2 y toda cola de
+repaso propia (Anki es el motor), las estrellas de dominio, los logros, las seis
+bases JSON de tracking, y el `Score: X/10`.
+
+**Un turno es una llamada; el cierre es otra.** Partir el turno en "respondeme"
+y "corregime" da 16–36 s y no habilita ningún llenado progresivo: las dos
+mitades pintan en el mismo bloque y ninguna se lee sin la otra. Los dos
+precedentes del repo no aplican — `/api/generate/cards` se parte por ítem y acá
+hay un solo ítem, y `/api/syllabus` se parte porque una mitad cachea en disco y
+acá cada turno es texto nuevo.
+
+**Medido: 13–21 s por turno, 30–35 s el cierre, y el historial no es la
+perilla.** Un turno con diez intercambios de contexto tardó *menos* que el
+primero de una sesión vacía. La latencia la manda el arranque del proceso, no el
+tamaño del prompt, así que `HISTORY_TURNS = 6` es holgado y no hay nada que
+optimizar ahí.
+
+**El catálogo de patrones no viaja en el prompt del turno.** Son cuarenta y
+cuatro entradas y el turno ocurre veinte veces por sesión; la identidad estable
+sólo hace falta donde se cuenta, y se cuenta al cerrar.
+
+### La identidad de un patrón
+
+Es el punto donde esto se caía, y la lección ya estaba escrita para el temario:
+*"el desacuerdo es sobre granularidad, no sobre contenido… el arreglo no es un
+prompt mejor, es dejar de preguntar dos veces"*.
+
+Si el modelo **nombra** el patrón en texto libre, una sesión da "artículo
+faltante antes de sustantivo contable" y la siguiente "falta el a/an", y
+**ninguna normalización cierra esa distancia** — no es ortografía, es con qué
+finura partir la misma cosa. El conteo se fragmenta en veinte patrones de uno y
+el umbral no llega nunca.
+
+Así que **el modelo no nombra el patrón: lo elige de `coach.PATTERNS`**, y la
+clave se valida con `_canonical` contra la tupla cerrada. Misma técnica que
+`deck_for()` con skill y nivel y que `cover()` con los puntos del temario. La
+vara del tamaño de una entrada: **un patrón tiene que ser algo que una tarjeta
+pueda enseñar**, la misma que se le aplica a un término.
+
+Verificado contra el modelo real: dos sesiones sobre temas distintos, con los
+mismos hábitos redactados de otra manera, eligieron **exactamente las mismas
+claves**, y en cuatro corridas `unmatched` quedó vacío.
+
+**Un ejemplo va con su arreglo, nunca solo.** `areas[].examples` son pares
+`{wrong, right}` y no fragmentos sueltos. Con el fragmento solo, un `tink` te
+señala dónde te equivocaste sin decirte qué iba ahí — y para cuando leés el
+análisis, la frase que lo rodeaba quedó veinte minutos y seis turnos atrás. En
+pantalla el par usa el mismo diff por palabras, apilado y no en dos columnas:
+seis áreas por tres ejemplos son dieciocho casos, y dieciocho placas dobles
+convierten un resumen en un muro.
+
+**Un área sin patrón lo dice.** Un hallazgo cuya clave no matchea no cuenta, y
+se dibujaba **idéntico** a uno que sí: un hábito marcado crítico se leía como
+cualquier otro mientras el contador lo ignoraba. Ahora la pantalla lo avisa, y
+`unmatched` registra también el caso vacío —agrupado por área— que antes se
+evaporaba. El prompt pide devolver vacío antes que forzar una clave que
+signifique otra cosa, y hace bien, pero el vacío no dejaba el rastro que
+`unmatched` existe para dejar. Medido: dos de cinco áreas de una sesión real
+salieron sin patrón y nadie se enteró.
+
+**Así apareció `spell-phonetic`.** Escribir de oído —`tink`, `becouse`,
+`whithout`, `figth`, `bets`— era el hábito más repetido de la colección, el
+análisis lo marcaba crítico, y era el único que el catálogo no sabía nombrar:
+no contaba y nunca iba a ser tarjeta. Es distinto de `spell-es-calque`, donde
+la palabra existe y le falta una letra doble. **El catálogo se amplía con
+evidencia, no por reflejo**: `unmatched` es la lista de lo que se repite sin
+nombre, y de ahí sale la próxima entrada.
+
+**Lo que no matchea se muestra igual, pero no cuenta**, y la clave cruda se
+acumula en `patterns.json` bajo `unmatched`. Eso no es un contador: es la lista
+de lo que le falta al catálogo, que es tuyo para ampliar. Nada de bolsa de
+basura por categoría — un `grammar-otros` llegaría a tres con cuatro errores
+distintos y pediría una tarjeta imposible de escribir. El lado seguro del error
+es **contar de menos**, por la misma razón que en `cover()`.
+
+**Se cuentan sesiones, no ocurrencias.** Escribir "I have 25 years" tres veces
+en un párrafo es un hábito, no tres errores. `count` sube como máximo uno por
+sesión, y lo que se guarda es el **id de la sesión** y no la fecha: con la
+fecha, dos sesiones de la misma tarde contaban una sola vez y la pantalla que
+dice "te pasó en 3 sesiones" habría estado mintiendo. El contador se **deriva**
+de esa lista en vez de guardarse, así que no puede discrepar de ella, y
+`carded` no borra historia: mueve la raya.
+
+**Y se cuenta sólo al cerrar.** Las correcciones por turno no cuentan nada: el
+mismo error se contaría dos veces, y el cierre es lo único que ve la sesión
+entera y sabe qué se repitió, que es la pregunta que el contador responde. La
+consecuencia es honesta y la pantalla la dice: abandonar una sesión no cuenta.
+
+**El contador no es un motor de repaso.** No hay intervalo, ni facilidad, ni
+cola, ni fecha de próximo repaso, ni nada que decida *cuándo* estudiás. Es un
+diagnóstico con un disparador, y lo que dispara es abrir `#/agregar`. Y ningún
+número de la práctica sale a Hoy ni al Dashboard: no hay "sesiones de práctica"
+ni "racha de práctica", que sí serían la métrica acumulada que está prohibida.
+
+### La sesión vive en el disco
+
+`llm.generate` no tiene memoria, así que cada turno serializa el historial
+dentro del prompt y el historial tiene que sobrevivir al proceso igual. **El
+archivo es la conversación**; un dict en memoria del servidor sería una segunda
+copia y las segundas copias se desincronizan. El navegador sólo espeja.
+
+**El turno se escribe dos veces**: tu texto con `state: "pending"`, después la
+llamada al modelo, y al aterrizar se reescribe el mismo índice con `"done"`. Un
+turno tarda casi veinte segundos y recargar en el medio es normal; sin ese
+primer write tu mensaje desaparece de la pantalla y reaparece solo cuando el
+subprocess termina. Un turno que quedó colgado se reintenta **en su mismo
+lugar** — agregando uno nuevo, tu mensaje aparecería dos veces en el hilo.
+
+**El id de sesión tiene resolución de un segundo, y eso fue un bug real.** Dos
+sesiones abiertas dentro del mismo segundo compartían id y la segunda pisaba el
+archivo de la primera: cerrar y apretar "Practicar de nuevo" es un clic, y el
+análisis recién guardado se perdía. `new_session` corre el id un segundo hacia
+adelante mientras el archivo exista.
+
+**Ninguno de los seis endpoints toca Anki**, y ninguno lleva el guardia de 503.
+Es deliberado: conversar en inglés no necesita la colección para nada, y
+heredar el guardia por copiar y pegar mataría la pantalla entera cada vez que
+Anki está cerrado. Está verificado con Anki muerto, y es lo primero a
+comprobar si alguien toca esas rutas.
+
+**El nivel no se lee del catálogo.** `current_level` para Writing dice A1 por
+ausencia y no por diagnóstico — la caminata A1→C1 se detiene en el primer nivel
+que no se sostiene y un nivel vacío tampoco se sostiene, así que con Writing en
+cero siempre va a decir A1. La pantalla tiene un selector, con B1 por defecto:
+i+1 sobre lo que la colección sí muestra, que es Grammar en A1/A2 contra Reading
+y Speaking en B2.
+
+**Una corrección arregla sólo lo que explica.** Medido en una sesión real, el
+modelo empaquetaba: `was build for me` → `was built by me` salía etiquetado
+"preposiciones" explicando sólo `for`→`by`, y arreglaba el participio en
+silencio; `the firt step was create` explicaba sólo el infinitivo y corregía la
+falta de ortografía sin decirlo. Los dos huecos del turno estaban
+contrabandeando, y el tope de dos lo **premiaba** — empaquetando se entregan
+cuatro arreglos en dos huecos.
+
+Cuesta dos cosas. El par antes/después existe para que veas exactamente qué
+cambió y leas por qué, y un arreglo colado al lado de uno explicado no enseña
+nada. Y peor: **el contador sólo cuenta lo que el cierre nombra**, así que un
+error absorbido en silencio nunca llega al umbral y nunca se vuelve tarjeta —
+encima el cierre recibe las correcciones del turno como "esto ya se corrigió" y
+da el asunto por cerrado.
+
+La regla ahora parte los errores no relacionados en fragmentos angostos
+separados, y cuando dos sí son la misma regla —el participio y la preposición
+de agente de una pasiva— pide que `why` nombre las dos mitades. Verificado: la
+misma frase vuelve como *"el verbo va en participio (built, no build), **y**
+quien hace la acción se introduce con by"*, y la etiqueta pasó a `gramática`.
+**La cobertura visible es más angosta**, que es el precio: lo que ya no se cuela
+lo levanta el cierre.
+
+**Se marcan las palabras que cambian, no se pinta el bloque.** Poner tu frase
+al lado de la corregida no alcanza cuando el idioma es el que estás aprendiendo:
+son dos párrafos parecidos y encontrar la diferencia queda de tu lado. Un diff
+por palabras (LCS, en `practice.js`) marca sólo lo que cambió — sube por peso y
+tinta mientras el resto del valor baja a `--ink-3`. El lado equivocado dejó de
+atenuarse con `opacity`, porque la opacidad se lleva puestos a los hijos y la
+palabra marcada no podía volver a subir; en `#practice` baja por color. Rojo y
+verde se pidieron y no se pusieron: el rojo sigue siendo un fallo del sistema y
+nunca un estado de la persona, y pintar el bloque entero no dice **qué** cambió,
+que era el problema.
+
+**Los temas sugeridos son los que ya elegiste, no los de tus mazos.** Salían
+del catálogo de mazos y estaba mal: el tema de un mazo dice **qué enseña**, y en
+Grammar eso es una regla. La pantalla ofrecía «Negatives with any» y «Adverbs of
+frequency» como temas de conversación, que no son temas de conversación de nada.
+Un tema que ya elegiste está probado por definición — conversaste sobre él — y
+detrás quedan unos genéricos concretos. De paso la pantalla de arranque dejó de
+llamar a `/api/catalog`, así que ahora **ninguna parte de la práctica toca
+Anki**, ni el servidor ni el cliente.
+
+**Los patrones tienen pantalla propia, `#/patrones`.** El conteo existía y
+sólo se veía al cerrar una sesión: no había dónde mirarlo cuando querías. Se
+entra desde Práctica y desde Writing, **sin item de nav** — con ocho destinos ya
+en la barra, una novena entrada para algo que se consulta cada tantos días es
+mueble. Muestra cuánto se repite cada patrón, cuántas sesiones faltan para el
+umbral, tus propias frases, y los huecos del catálogo en un panel aparte, porque
+ésos son trabajo pendiente del app y no fallos tuyos.
+
+**Y de ahí sale lo más cerca de "mejoraste" que estos datos dan honestamente**:
+un patrón con `carded` puesto y el contador en cero no volvió a aparecer desde
+que lo llevaste a Agregar. Se dice así y no "desde que hiciste la tarjeta",
+porque `carded` se marca al hacer clic en el enlace y si después escribiste la
+tarjeta o no es algo que este lado no sabe.
+
+**El análisis se puede releer.** Era de un solo uso: se pintaba al cerrar y en
+cuanto cambiabas de pantalla no había forma de volver, aunque el archivo
+estuviera entero en el disco. `GET /api/practice/session` devuelve también la
+última cerrada y la pantalla de arranque ofrece abrirla. Releerla **no cuenta
+nada** —el conteo ocurrió al cerrar— y los patrones listos se piden aparte,
+porque el umbral pudo alcanzarse o apagarse después de aquel cierre. De paso es
+lo único que hace testeable un cambio en el panel de cierre sin tener una
+conversación entera de nuevo.
+
+**Cerrar vive abajo, con Enviar.** Estaba en la cabecera del panel y a los cinco
+intercambios el hilo ya lo había empujado fuera de pantalla — y cerrar es lo
+único que hace que la sesión cuente. Pasados `READY_AFTER = 5` intercambios el
+botón sube por peso y tinta y pasa a sugerir; nunca toma `--present`, que ya
+está en Enviar.
+
+**El rojo y las tres severidades.** fluent marca la severidad con 🔴🟡🟢 y acá el
+rojo es sólo un fallo del sistema, nunca un estado de la persona. La severidad
+sobrevive como semántica —ordena la lista y decide qué se corrige— y se dibuja
+con una etiqueta mono en `--ink-4`. La corrección usa el **mismo par
+antes/después que el panel de reparación**, que es lo que el canvas ya pedía:
+`.field` + `.side`, lo tuyo a `opacity .55` y lo correcto con `--rule-blue`. Por
+eso `side()` se mudó de `repair.js` a `ui.js`.
+
 ## Front end
 
 No framework, no build step, no npm. Save a file, reload the browser.
 
-- **Nine screens, hash routing.** `#/hoy`, `#/progreso`, `#/skill/<skill>`,
+- **Eleven screens, hash routing.** `#/hoy`, `#/progreso`, `#/skill/<skill>`,
   `#/mazos`, `#/agregar` (also `#/agregar/<skill>/<level>` and
-  `#/agregar/<skill>/<level>/<topic>`), `#/atascos`,
-  `#/ajustes`, `#/dashboard`. Hash and not path:
+  `#/agregar/<skill>/<level>/<topic>`), `#/practica/writing`, `#/patrones`,
+  `#/atascos`,
+  `#/ajustes`, `#/dashboard`. La práctica lleva la habilidad en la ruta para que
+  `#/practica/speaking` sea una línea y no una pantalla nueva. Hash and not path:
   `StaticFiles` is mounted at the root and knows nothing about `/progreso`, so
   reloading a path route would 404.
 - **Hoy and Dashboard are two screens, not one.** Hoy is Pantalla 1 v2 of the
@@ -407,6 +637,21 @@ No framework, no build step, no npm. Save a file, reload the browser.
   heuristic caching and keep serving a stylesheet edited minutes ago. **That
   looks exactly like the change not having worked** — it cost a whole round of
   "you didn't do it" / "yes I did" before the header was added.
+- **Y su primo, que se ve igual y no es la caché: la pestaña abierta.** Cambiar
+  la forma de un payload mientras hay una pantalla cargada deja JS viejo
+  recibiendo datos nuevos, y el servidor —con `--reload`— ya devuelve la forma
+  nueva sin que el navegador se haya enterado. Pasó al convertir los ejemplos
+  del análisis de texto a pares `{wrong, right}`: la pantalla dibujó
+  `[object Object]` tres veces. Acá la caché no interviene, porque nunca hubo
+  una segunda petición. **Al cambiar la forma de una respuesta, recargar es
+  parte del cambio**, y el síntoma no se diagnostica leyendo el código nuevo —
+  hay que mirar qué está sirviendo el servidor y compararlo con la hora en que
+  se cargó la pantalla.
+- **El teclado existe, y es de esta pantalla sola.** Hasta la práctica de
+  escritura no había un solo `keydown` en `static/`: todo se disparaba con un
+  botón. El compositor manda con Enter y salta de línea con Shift+Enter, guarda
+  `event.isComposing` —donde Enter confirma un carácter y no termina una frase—
+  y no dispara con un turno en vuelo.
 - **Excalifont is vendored** at `static/fonts/`, SIL OFL 1.1, one 25 KB subset.
   Same rule as anime.js: local-only app, no CDN. Declared with `font-display:
   swap` and a `unicode-range`, and the system stack stays behind it in
@@ -532,9 +777,25 @@ A revlog row is
 
 ## Verifying a change
 
-This machine has **no Node and no automatable browser**, so JS cannot be
-executed or rendered here. What is worth checking before claiming something
-works:
+**Node sí está en esta máquina** — `v26.7.0`, vía mise, junto con `deno`. Lo que
+falta es un **navegador automatizable**, así que el JS se puede *parsear* pero
+no *renderizar*. Esto decía "no Node" y era falso, y por creerlo el front se
+verificó a ojo durante todo el proyecto. Lo que Node sí compra, y hay que usar:
+
+```bash
+# Sintaxis de cada módulo. Copialos a .mjs primero: `node --check` parsea como
+# CommonJS y un `import` de arriba lo hace fallar por la razón equivocada.
+for f in static/*.js static/views/*.js; do
+  [ "$(basename $f)" = anime.esm.js ] && continue
+  cp "$f" /tmp/$(basename ${f%.js}).mjs && node --check /tmp/$(basename ${f%.js}).mjs || echo "ROTO $f"
+done
+```
+
+Y sirve para probar lógica pura del front sin navegador — el round-trip de
+`encodeURIComponent` → `router.parse()` → `decodeURIComponent` de los 44 seeds
+del catálogo de patrones se comprobó así, en un `node -e`.
+
+Lo demás sigue igual:
 
 - Python — `python -c "import ast; ast.parse(open('x.py').read())"`, then import
   every module. Neither catches a **name that no longer exists**: `TERMS_PROMPT`
@@ -544,9 +805,14 @@ works:
   it in a second, and there is no linter on this machine to do it for you.
 - Pure functions — call `analysis.streak` / `calendar` / `struggling` with
   synthetic `Review` rows. This is where real bugs have been caught.
-- Front end — cross-check that every `$("id")` in `app.js` exists in
-  `index.html`, and that no CSS selector points at a class nothing renders. A
-  missing id is the usual cause of a blank page.
+- Front end — cross-check that every `$("id")` in each view exists in **its own
+  MARKUP**, that no CSS selector points at a class nothing renders, and que cada
+  nombre importado exista de verdad en el módulo que lo exporta. Un id que falta
+  es la causa habitual de una pantalla en blanco.
+- Endpoints que no dependen de Anki — **probarlos con Anki muerto.** Con
+  `fastapi.testclient.TestClient` y `anki.is_alive = lambda: False` se comprueban
+  los seis de la práctica en un segundo, sin cerrar Anki de verdad. Es la
+  regresión más fácil de introducir: el guardia de 503 se copia y se pega solo.
 - Anki state — **read it back from Anki**, do not trust the response of the call
   that wrote it. `addNotes` returned eight ids for notes that were gone a minute
   later.
@@ -599,8 +865,8 @@ The `interface-design` skill is installed in `.claude/skills/`, with
 
 ## Current status
 
-Nine screens navigate: Hoy, Progreso, the five skill libraries, Mazos, Agregar,
-Atascos, Ajustes and Dashboard. Hoy and the Dashboard read `/api/today`, and
+Ten screens navigate: Hoy, Progreso, the five skill libraries, Mazos, Agregar,
+Práctica, Atascos, Ajustes and Dashboard. Hoy and the Dashboard read `/api/today`, and
 the Dashboard also reads `/api/catalog`, as Progreso, the skill screens and
 Mazos do; Atascos reads `/api/stuck`; repair works from both Hoy and Atascos.
 
@@ -617,6 +883,15 @@ seventeen of them named by all three drafts; a hand edit to the file survives a
 reload and is reported as such; and reopening that level now costs 11 ms for
 the points and 27 s for the coverage, with the file untouched.
 
-Not built: rename/archive on Mazos and the exercise mode.
+La práctica de escritura funciona de punta a punta: elegís un tema, conversás
+en inglés, te corrige dos cosas por turno y al cerrar te da el análisis
+completo con tus mensajes reescritos. Verificado contra el modelo real —
+turnos de 13 a 21 s, cierres de 30 a 35, y dos sesiones sobre temas distintos
+con los mismos hábitos eligieron exactamente las mismas claves de patrón, con
+`unmatched` vacío en las cuatro corridas.
+
+Not built: rename/archive on Mazos. El modo ejercicio tiene su primera
+instancia en Writing; Speaking, Listening y Reading todavía no la tienen, y la
+ruta ya está preparada para ellas.
 
 (Update this section after each phase.)

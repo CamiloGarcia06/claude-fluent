@@ -16,6 +16,8 @@ import * as stuck from "/views/stuck.js";
 import * as settings from "/views/settings.js";
 import * as dashboard from "/views/dashboard.js";
 import * as add from "/views/add.js";
+import * as practice from "/views/practice.js";
+import * as patterns from "/views/patterns.js";
 
 const ROUTES = {
   hoy: today,
@@ -23,6 +25,8 @@ const ROUTES = {
   skill,
   mazos: decks,
   agregar: add,
+  practica: practice,
+  patrones: patterns,
   atascos: stuck,
   ajustes: settings,
   dashboard,

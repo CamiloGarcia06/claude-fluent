@@ -6,7 +6,7 @@
 // had when this was part of app.js, so styles.css did not have to change —
 // only one view is mounted at a time, so the ids stay unique.
 
-import { $, el, getJSON } from "/ui.js";
+import { $, el, getJSON, side } from "/ui.js";
 
 const MARKUP = `
   <div class="panel-head">
@@ -24,13 +24,6 @@ const MARKUP = `
 
 let proposal = null;
 let onApplied = null;
-
-function side(label, value, changed) {
-  const box = el("div", "side");
-  box.dataset.changed = String(changed);
-  box.append(el("span", "side-label", label), el("div", "side-value", value || "—"));
-  return box;
-}
 
 function renderDiff(data) {
   const diff = $("repair-diff");

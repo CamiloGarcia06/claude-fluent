@@ -15,6 +15,28 @@ export function el(tag, className, text) {
   return node;
 }
 
+// Un lado del par antes/después. Vive acá y no en repair.js porque la práctica
+// de escritura dibuja exactamente la misma pieza —lo que escribiste contra lo
+// correcto— y dos copias de esto se separarían al primer retoque.
+// `mark` es opcional y sólo la práctica lo usa: en el panel de reparación
+// "Antes" no está mal, es el estado actual de la tarjeta, y una cruz ahí
+// significaría otra cosa.
+export function side(label, value, changed, mark) {
+  const box = el("div", "side");
+  box.dataset.changed = String(changed);
+  if (mark) box.dataset.mark = mark;
+
+  // `value` puede venir como texto o como nodo. La práctica pasa un fragmento
+  // con las palabras que cambian marcadas; el panel de reparación pasa el campo
+  // pelado, y sigue funcionando igual.
+  const shown = el("div", "side-value");
+  if (value instanceof Node) shown.append(value);
+  else shown.textContent = value || "—";
+
+  box.append(el("span", "side-label", label), shown);
+  return box;
+}
+
 // ── Motion ────────────────────────────────────────────────────────────
 // Only the Today screen animates, and only on load. Anything you cross a
 // hundred times must be instant, so the other screens paint at once.

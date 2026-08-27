@@ -818,6 +818,25 @@ h2 {
   transition: filter 140ms cubic-bezier(.23,1,.32,1),
               transform 110ms cubic-bezier(.23,1,.32,1);
 }
+/* Un `.ghost` dentro de `.actions` salía pintado como primario: `.actions
+   button` (0,1,1) le gana a `.ghost` (0,1,0). Dos acciones primarias en la
+   misma fila es justo lo que este sistema prohíbe — y venía pasando desde antes
+   de la práctica, en el panel de reparación, donde "Descartar" se veía igual
+   que "Aceptar". Conserva la altura del primario para que la fila lea como una
+   fila, y baja por peso y color, que es como se dice "secundario" acá. */
+.actions button.ghost {
+  color: var(--ink-2);
+  background: transparent;
+  border-color: var(--rule);
+  border-radius: var(--r-rough-alt);
+  font-weight: 500;
+}
+.actions button.ghost:hover:not(:disabled) {
+  filter: none;
+  color: var(--ink);
+  background: var(--paper-inset);
+}
+
 .actions button:hover:not(:disabled) { filter: brightness(1.08); }
 .actions button:active:not(:disabled) { transform: scale(0.975); }
 
@@ -1349,6 +1368,347 @@ h2 .rail-chip { margin-left: var(--s2); }
 
 .point a.count { color: var(--ink-3); text-decoration: none; }
 .point a.count:hover { color: var(--ink); text-decoration: underline; }
+
+/* ── La práctica de escritura ─────────────────────────────────────────
+   Nada de burbujas: cada intercambio es un bloque separado por una regla,
+   con la etiqueta mono al costado. La corrección reusa .diff/.field/.side
+   del panel de reparación, que es la misma pieza — lo que hay contra lo
+   que debería haber. */
+
+.actions a.primary {
+  font: 600 14px/1 var(--font);
+  color: var(--present-ink);
+  background: var(--present);
+  border: 1px solid var(--present);
+  border-radius: var(--r-rough);
+  padding: var(--s3) var(--s5);
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  transition: filter 140ms cubic-bezier(.23,1,.32,1),
+              transform 110ms cubic-bezier(.23,1,.32,1);
+}
+.actions a.primary:hover { filter: brightness(1.08); text-decoration: none; }
+.actions a.ghost {
+  font: 500 14px/1 var(--font);
+  color: var(--ink-2);
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-rough-alt);
+  padding: var(--s3) var(--s5);
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+.actions a.ghost:hover {
+  color: var(--ink);
+  background: var(--paper-inset);
+  text-decoration: none;
+}
+.actions a.primary:active { transform: scale(0.975); }
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-top: var(--s3);
+}
+.level-pick {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-top: var(--s4);
+}
+.pick-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  margin-right: var(--s1);
+}
+
+/* ── Un intercambio ──────────────────────────────────────────────────── */
+.turn {
+  padding: var(--s5) 0;
+  border-bottom: 1px solid var(--rule-faint);
+}
+.turn:last-child { border-bottom: 0; }
+
+.turn-label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  margin-bottom: var(--s1);
+}
+.turn-text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+.turn-reply { margin-top: var(--s4); }
+
+/* Lleva el peso porque es lo que tenés que contestar. No lleva --present:
+   el acento de esta pantalla ya está en Enviar, y sólo puede haber uno. */
+.turn-question {
+  margin: var(--s2) 0 0;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--ink);
+  text-wrap: pretty;
+}
+.turn-note {
+  margin: var(--s2) 0 var(--s3);
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.turn[data-state="failed"] .turn-note { color: var(--alarm); }
+
+.alt { margin-top: var(--s4); }
+.alt-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+}
+
+/* La explicación pertenece a las placas de arriba, así que va pegada a ellas y
+   sin regla en el medio. Tenía `margin 8 + padding 12` y un borde arriba, o sea
+   20px y una línea **dentro** de una corrección contra los 16px de `.diff` que
+   la separaban de la siguiente: la proximidad agrupaba al revés y la
+   explicación se leía colgando del título de la corrección siguiente. */
+.field-why {
+  grid-column: 1 / -1;
+  margin: var(--s3) 0 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+
+/* ── Las palabras que cambian ─────────────────────────────────────────
+   Poner tu frase al lado de la corregida no alcanza cuando el idioma es el que
+   estás aprendiendo: son dos párrafos parecidos y encontrar la diferencia queda
+   de tu lado. Las palabras que cambian se marcan, y el resto baja un escalón
+   para que resalten sin pintar nada.
+
+   El lado equivocado baja por **color y no por `opacity`**: la opacidad se
+   lleva puestos a los hijos y la palabra marcada no podría volver a subir.
+   Acotado a #practice — el panel de reparación compara campos de una tarjeta,
+   donde no hay una palabra culpable que señalar. */
+#practice .side[data-changed] { opacity: 1; }
+#practice .side-value { color: var(--ink-3); }
+#practice .chg { font-weight: 600; color: var(--ink); }
+
+/* La regla separa correcciones, nunca las partes de una. Es la misma norma que
+   `.rows li` y `.turn` ya siguen: hairline entre hermanos, no adentro de uno.
+   Acotada a #practice para no cambiar el panel de reparación, donde cada
+   `.field` es un campo de la nota y no hay explicación que agrupar. */
+#practice .field + .field {
+  border-top: 1px solid var(--rule-faint);
+  padding-top: var(--s4);
+}
+
+/* La marca del canvas, dibujada con bordes y no con un glifo: ✕ y ✓ caen
+   fuera del subset de 25 KB de Excalifont y renderizarían con otra cara. */
+.side[data-mark] { position: relative; padding-right: var(--s6); }
+.side[data-mark]::after {
+  content: "";
+  position: absolute;
+  top: var(--s3);
+  right: var(--s3);
+}
+.side[data-mark="right"]::after {
+  width: 6px;
+  height: 11px;
+  border: solid var(--present);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+.side[data-mark="wrong"]::before,
+.side[data-mark="wrong"]::after {
+  content: "";
+  position: absolute;
+  top: calc(var(--s3) + 5px);
+  right: var(--s3);
+  width: 12px;
+  height: 1.5px;
+  background: var(--ink-4);
+}
+.side[data-mark="wrong"]::before { transform: rotate(45deg); }
+.side[data-mark="wrong"]::after { transform: rotate(-45deg); }
+
+/* ── El compositor ───────────────────────────────────────────────────── */
+.composer { margin-top: var(--s5); }
+.composer .termbox { margin-top: 0; margin-bottom: var(--s2); }
+.composer-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  margin-top: var(--s3);
+}
+.composer-tip {
+  flex: 1;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+/* Cerrar es lo único que hace que la sesión cuente, así que el botón vive acá
+   abajo con Enviar. Estaba en la cabecera del panel y a los cinco intercambios
+   el hilo ya lo había empujado fuera de pantalla. */
+.turn-count {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+#practice #finish { flex: none; }
+/* Pasado el umbral el botón deja de ser sólo una salida y pasa a sugerir. Sube
+   por peso y por tinta, nunca por `--present`: ese acento ya está en Enviar. */
+#practice #finish[data-ready="true"] {
+  font-weight: 600;
+  color: var(--ink);
+  border-color: var(--rule);
+}
+.composer-foot button {
+  flex: none;
+  font: 600 14px/1 var(--font);
+  color: var(--present-ink);
+  background: var(--present);
+  border: 1px solid var(--present);
+  border-radius: var(--r-rough);
+  padding: var(--s3) var(--s5);
+  min-height: 40px;
+  cursor: pointer;
+}
+.composer-foot button:hover:not(:disabled) { filter: brightness(1.08); }
+.composer-foot .foot-msg { flex: none; margin: 0; }
+
+/* ── El cierre ───────────────────────────────────────────────────────── */
+.block-title {
+  margin: var(--s6) 0 var(--s2);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.area {
+  padding: var(--s4) 0;
+  border-bottom: 1px solid var(--rule-faint);
+}
+.area:last-child { border-bottom: 0; }
+.area-finding {
+  margin: var(--s1) 0 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+/* ── Patrones ─────────────────────────────────────────────────────────
+   Una fila acá no es una línea: lleva el conteo, el progreso hacia la tarjeta,
+   los ejemplos y sus acciones. Así que apila en vez de alinear en baseline, y
+   `.rows li` recupera su `display` por defecto. */
+#pattern-rows li.pattern {
+  display: block;
+  padding: var(--s4) var(--s2);
+}
+.pattern-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+}
+.pattern-head .name { flex: 1; min-width: 0; }
+/* El contador va en mono con cifras tabulares: es una cifra dentro de texto
+   manuscrito, que es exactamente lo que es una ficha. */
+/* La cifra en mono con tabulares —es una cifra dentro de texto manuscrito— y
+   la unidad pegada debajo, en la etiqueta chica de siempre. Un "2/3" solo hay
+   que adivinarlo. */
+.pattern-score {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  text-align: right;
+}
+.pattern-score b {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+}
+#pattern-rows li.pattern[data-ready="true"] .pattern-score b { color: var(--ink); }
+.score-unit {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+#pattern-rows li.pattern[data-ready="true"] .pattern-head .name {
+  font-weight: 600;
+  color: var(--ink);
+}
+.pattern-meta {
+  margin: var(--s1) 0 0;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.pattern-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-top: var(--s3);
+}
+.pattern-actions .ghost { text-decoration: none; }
+#pattern-rows .area-examples { margin-top: var(--s3); }
+
+/* Sin color: no es un fallo tuyo, es un hueco del catálogo. */
+.area-uncounted {
+  margin: var(--s2) 0 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-4);
+}
+.area-examples {
+  list-style: none;
+  margin: var(--s3) 0 0;
+  padding: 0;
+}
+/* Cada caso son dos líneas: lo que escribiste y lo que iba, con las palabras
+   que cambian marcadas en las dos. Apiladas y no en dos columnas — hasta seis
+   áreas por tres ejemplos son dieciocho casos, y dieciocho placas dobles
+   convierten un resumen en un muro. La corregida lleva la raya `--rule-blue`,
+   que es lo que significa "correcto" en el resto de la pantalla. */
+.area-examples li {
+  display: grid;
+  gap: var(--s1);
+  padding: var(--s2) 0;
+  font-family: var(--mono);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.ex-wrong { color: var(--ink-4); }
+.ex-right {
+  color: var(--ink-3);
+  border-left: 2px solid var(--rule-blue);
+  padding-left: var(--s2);
+}
+.rows li a.ghost { flex: none; text-decoration: none; }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }

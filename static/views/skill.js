@@ -10,6 +10,11 @@ import { rail, slug } from "/views/progress.js";
 
 const topicOf = (deck) => deck.split("::").pop();
 
+// Qué habilidades tienen práctica, y cuál. Un mapa y no un `if skill ===
+// "Writing"`: cuando Speaking la tenga es una línea acá y ninguna rama nueva,
+// y este módulo sirve a las cinco pantallas.
+const PRACTICE = { Writing: "writing" };
+
 const MARKUP = `
 <div id="skill">
   <section class="hero">
@@ -20,6 +25,7 @@ const MARKUP = `
       <span id="skill-standing" class="streak"></span>
       <span id="skill-rail" class="rail-solo"></span>
     </div>
+    <div class="actions" id="skill-actions" hidden></div>
   </section>
   <div id="levels"></div>
 </div>
@@ -286,6 +292,18 @@ export async function render(root, params) {
     ? `Estás en ${skill.current_level} · ${percent(skill.maturity)} maduras`
     : "Sin ninguna tarjeta todavía";
   $("skill-rail").append(rail(skill, data.maturity_threshold));
+
+  // La única acción primaria de esta pantalla, y sólo donde hay práctica. Un
+  // `<a>` y no un `<button>`: es navegación, no una llamada.
+  const practice = PRACTICE[skill.skill];
+  if (practice) {
+    const link = el("a", "primary", "Practicar escritura");
+    link.href = `#/practica/${practice}`;
+    const seen = el("a", "ghost", "Mis patrones de error");
+    seen.href = "#/patrones";
+    $("skill-actions").append(link, seen);
+    $("skill-actions").hidden = false;
+  }
 
   const levels = $("levels");
   levels.className = "columns";

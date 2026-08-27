@@ -332,6 +332,46 @@ eye lands only on what would change. The "después" side of a changed field take
 a `--rule-blue` border. **No red anywhere:** a stuck card is work in progress,
 not a verdict.
 
+### Writing practice (`#/practica/writing`)
+No chat bubbles: a bubble is not an index card. Each exchange is a block
+separated by a `--rule-faint` hairline, with a mono 11px uppercase `--ink-4`
+label down the left (`VOS` / `CLAUDE`). Your own text and the reply sit at 15px
+`--ink-2` — you already know what you wrote, so it steps back. The **question**
+takes 16px/500 `--ink`, because it is the thing you have to answer; it
+deliberately does **not** take `--present`, since the accent on this screen is
+already spent on `Enviar` and there is only one. The natural alternative gets a
+mono `MÁS NATURAL` label and 13px `--ink-3`.
+
+### Correction pair
+**The repair panel's before/after, reused verbatim** — `.field` + `.side`, which
+is what the design canvas asked for in as many words. What you wrote is
+`data-changed="false"` at `opacity .55`; the correct version takes the
+`--rule-blue` border. The ✕ / ✓ marks are scoped to `.side[data-mark]`, an
+attribute only the practice view sets, so the repair panel is untouched: there
+"Antes" is not wrong, it is the card's current state, and the same mark would
+mean something else. They are drawn **with CSS borders, never glyphs** — ✕ and ✓
+fall outside Excalifont's 25 KB subset and would render in the fallback face.
+
+The explanation sits **directly under the plates with no rule between them**,
+and the hairline goes **between** consecutive corrections instead. This departs
+from the design canvas, which drew a divider above the explanation — but that
+card carried a single correction, where the line was unambiguous. Stacked, it
+inverted the grouping: 20px and a rule inside one correction against 16px
+separating it from the next, so the explanation read as hanging off the
+following correction's label. Hairlines between siblings, never inside one — the
+same rule `.rows li` and `.turn` already follow.
+
+### Severity label
+Mono 11px uppercase `--ink-4` on the `.field-name` line — `PREPOSICIONES ·
+MODERADO` — plus the order of the list. Never colour. Same decision already
+taken for stuck cards.
+
+### Composer
+`.termbox` above, the `.gen-track` / `.gen-bar` honest bar below it, and a foot
+row with the keyboard tip, the message, and the primary button. **The textarea
+is never disabled while the model thinks**: locking a text field for twenty
+seconds feels broken, and typing on is the only way to win that time back.
+
 ### Buttons
 - primary `.actions button` — 40px min-height · 12px 24px · 14px/600 · filled `--present`
 - ghost `.ghost` — 13px/500 `--ink-2` on transparent, 1px `--rule`
@@ -366,6 +406,14 @@ easy case; these are the ones that decide whether it feels encouraging.
 
 | Decision | Rationale | Date |
 |---|---|---|
+| Every example in the closing analysis carries its fix | The areas listed `tink`, `becouse`, `whithout` — where you went wrong, never what belonged there. By the time you read the analysis the sentence around that fragment is six turns and twenty minutes behind you, so a bare fragment is unreadable in the language you are learning. Examples became `{wrong, right}` pairs drawn with the same word-level diff, stacked rather than in two columns: six areas of three examples is eighteen cases, and eighteen double plates turn a summary into a wall. The corrected line takes the `--rule-blue` edge, which is what "correct" already means on this screen. | 2026-08-26 |
+| An uncounted finding says so | A finding whose pattern is not in the catalogue does not count toward a card, and was drawn identically to one that does — a habit the analysis itself called critical read exactly like the rest while the counter ignored it. It now carries a mono `--ink-4` note. No colour: it is a gap in the catalogue, not a failure of yours. | 2026-08-26 |
+| The changed words are marked; the block is not coloured | The ask was red for the error and green for the correction, and the reason behind it was the real finding: *"no sé inglés, sólo puedo adivinar lo que dices."* Two similar paragraphs side by side and finding the difference is left to the reader — in the language they are learning. Colouring the whole block does not answer that: it says which side is which, which the labels and the ✕/✓ already say. What answers it is a word-level LCS diff, so only what actually changed is marked. It rises by weight and ink while the rest of the value drops to `--ink-3`; the wrong side had to stop dimming with `opacity`, since opacity takes its children with it and the marked word could never come back up. Red stays what it has always been here: a failure of the system, never a state of the person. | 2026-08-26 |
+| "Cerrar y analizar" moved from the panel head to the composer foot | It sat above the thread. Past five exchanges the thread had pushed it off screen, and closing is the **only** action that makes a session count — abandon one and the pattern counter never moves. The rule already written for messages ("report where you pressed, not in the hero") applies to the action itself. Past `READY_AFTER` exchanges it rises by weight and ink to suggest rather than merely offer, never taking `--present`: that accent is spent on Enviar. | 2026-08-26 |
+| A correction may only fix what its explanation accounts for | Observed on a real session: `was build for me` → `was built by me` was labelled "preposiciones" and explained only `for`→`by`, silently repairing the participle; `the firt step was create` explained only the infinitive and silently repaired the typo. Both slots were smuggling. Two costs — the diff exists precisely so you can see what changed and read why, and the pattern counter only ever counts what the close *names*, so an error absorbed in silence never reaches the threshold and never becomes a card. The cap of two per turn was rewarding it: bundling delivers four fixes in two slots. The rule now splits unrelated mistakes into separate narrow fragments and requires both halves to be named when they really are one rule. Honest coverage is narrower — that is the trade, and the close is what catches the rest. | 2026-08-26 |
+| fluent's 🔴🟡🟢 severity markers were dropped, the severity itself was kept | The methodology this screen borrows tags every mistake by severity in colour. Red here is only ever a failure of the system, never a state of the person — and a mistake you made writing is the most person-shaped state there is. The severity still orders the list and still decides what gets corrected at all; it is said with a mono label and with position instead. | 2026-08-26 |
+| No score, anywhere in the practice | fluent closes every correction with `Score: 6/10` and a breakdown. A mark out of ten on a chat about anime is exactly the reproach this system rules out, and the named pattern is what makes you generalise — the number is what makes you stop writing. What was kept from that half of the template is the *why*, the correct version and the natural alternative. | 2026-08-26 |
+| The question carries weight but not the accent | It is the obvious place to reach for `--present`: it is literally the here-and-now of the screen. But the accent is already on `Enviar`, one primary per screen, and two blues would turn the focal point into decoration. Weight and ink colour carry it instead. | 2026-08-26 |
 | ~~System font stack, no web font~~ → **Excalifont, vendored** | Reversed, and the old row predicted it: it was logged as "the known weak point… revisit with an embedded `@font-face` if it ever matters." Both objections turned out to be answerable — vendoring the file keeps the app offline-only, and `index.html` did not have to change because the face is declared in the stylesheet. **The hand-drawn direction is a skin and nothing more:** same DOM, same buttons, same keyboard, same focus, same resize. Only the painting of text and outlines changed. | 2026-08-18 |
 | The hand is *handwriting*, not *whiteboard* | The distinction decides whether this looks right or looks like a mockup. A sketchy UI in the whiteboard sense says "provisional", which fights the whole premise of a daily ritual. But the accent was already defined as "the blue-black of writing ink", and a card written by hand is exactly that. The metaphor did not change; it got more literal. | 2026-08-18 |
 | No colour was borrowed along with the hand | Excalidraw's palette is many bright strokes. Taking it would undo the single-accent rule the whole system rests on. The look is the line and the letter, never the colour. | 2026-08-18 |

@@ -7,8 +7,10 @@ from fastapi.staticfiles import StaticFiles
 
 import analysis
 import anki
+import coach
 import generate
 import llm
+import practice
 import repair
 import snapshot
 import state
@@ -33,6 +35,14 @@ FRONTS_FOR_PROMPT = 60
 # A ceiling on one write. Ten terms of three candidates is thirty cards, and
 # anything far above that is a bug in the client rather than a real approval.
 MAX_CARDS_PER_WRITE = 60
+
+# El nivel al que se conversa cuando la pantalla no manda uno. **No se lee del
+# catálogo.** `current_level` para Writing dice A1, pero por ausencia y no por
+# diagnóstico: la caminata A1→C1 se detiene en el primer nivel que no se
+# sostiene, y un nivel vacío tampoco se sostiene, así que con Writing en cero
+# tarjetas siempre va a decir A1. B1 es i+1 sobre lo que la colección sí
+# muestra — Grammar en A1/A2 contra Reading y Speaking en B2.
+PRACTICE_LEVEL = "B1"
 
 
 @app.middleware("http")
@@ -552,6 +562,195 @@ def apply_repair(note_id: int, payload: dict) -> dict:
         "snapshot": str(path),
         "fields": {name: anki.to_plain_text(value) for name, value in written.items()},
     }
+
+
+# ── La práctica de escritura ──────────────────────────────────────────────
+# Ninguno de estos seis toca Anki, así que ninguno lleva el guardia de 503. Es
+# deliberado y hay que sostenerlo: conversar en inglés no necesita la colección
+# para nada, y heredar el guardia por copiar y pegar mataría la pantalla entera
+# cada vez que Anki está cerrado, sin ninguna razón.
+
+
+def _practice_level(value) -> str:
+    """El nivel que manda la pantalla, contra la tupla cerrada de siempre."""
+    wanted = str(value or "").strip().lower()
+    for level in analysis.LEVELS:
+        if level.lower() == wanted:
+            return level
+    return PRACTICE_LEVEL
+
+
+def _open_or_404(session_id) -> dict:
+    """La sesión que el cliente nombró, abierta y escribible, o el error."""
+    try:
+        practice._valid_id(session_id)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+    session = practice.load(str(session_id))
+    if session is None:
+        raise HTTPException(404, "esa sesión no existe")
+    if session["closed"]:
+        raise HTTPException(409, "esa sesión ya está cerrada")
+    return session
+
+
+@app.get("/api/practice/session")
+def practice_session() -> dict:
+    """La sesión abierta, y la última cerrada. Lee disco: sin modelo.
+
+    `last` viaja entera para que releer el análisis no cueste una segunda
+    petición: es un archivo local y una sesión completa son unos pocos kilobytes.
+    """
+    return {
+        "session": practice.open_session(),
+        "last": practice.last_closed(),
+        "topics": practice.recent_topics(),
+    }
+
+
+@app.post("/api/practice/session")
+def practice_start(payload: dict | None = None) -> dict:
+    """Abrir una sesión sobre un tema.
+
+    No llama al modelo: el saludo lo compone el app. Quince segundos de espera
+    antes de poder escribir la primera palabra es exactamente donde se abandona,
+    y para decir "hablemos de anime" no hace falta un `claude -p`.
+    """
+    body = payload or {}
+    topic = " ".join(str(body.get("topic", "")).split())[:60]
+    if not topic:
+        raise HTTPException(400, "elegí un tema para conversar")
+
+    level = _practice_level(body.get("level"))
+
+    current = practice.open_session()
+    if current and not body.get("restart"):
+        raise HTTPException(409, "ya tenés una sesión abierta")
+    if current:
+        current["closed"] = True
+        current["abandoned"] = True
+        current["closed_at"] = datetime.now().isoformat(timespec="seconds")
+        practice.save(current)
+
+    session = practice.new_session(topic, level)
+    return {
+        "session": session,
+        "opening": f"Let's talk about {topic}. What's on your mind?",
+    }
+
+
+@app.post("/api/practice/turn")
+def practice_turn(payload: dict) -> dict:
+    """Responder un mensaje y corregir lo que estorbó. Una llamada, 13-21 s.
+
+    El turno se persiste dos veces: tu texto primero, la respuesta después. Sin
+    ese primer write, recargar a los cinco segundos borra lo que escribiste.
+    """
+    session = _open_or_404(payload.get("session_id"))
+
+    text = str(payload.get("text", "")).strip()
+    if not text:
+        raise HTTPException(400, "no escribiste nada")
+    if len(text) > coach.MAX_TEXT_CHARS:
+        raise HTTPException(400, "el mensaje es demasiado largo")
+    # Reintentar reescribe el turno que falló; mandar uno nuevo lo agrega.
+    retry = payload.get("retry_index")
+    if retry is None:
+        if len(session["turns"]) >= practice.MAX_TURNS:
+            raise HTTPException(
+                409, f"esta sesión ya llegó a {practice.MAX_TURNS} turnos: cerrala y analizala")
+        turn = practice.append_turn(session, text)
+    else:
+        try:
+            turn = practice.retry_turn(session, int(retry), text)
+        except (TypeError, ValueError, IndexError) as e:
+            raise HTTPException(400, f"no se puede reintentar ese turno: {e}") from e
+    try:
+        answer = coach.turn(session["topic"], session["level"],
+                            session["turns"][:turn["index"]], text)
+    except llm.LLMError as e:
+        # El turno queda visible y reintentable: cuesta ese turno y nada más.
+        practice.finish_turn(session, turn["index"], None, str(e))
+        raise HTTPException(502, f"claude -p failed: {e}") from e
+
+    return {
+        "turn": practice.finish_turn(session, turn["index"], answer),
+        "total": len(session["turns"]),
+    }
+
+
+@app.post("/api/practice/close")
+def practice_close(payload: dict) -> dict:
+    """Leer la sesión entera de una vez y contar los patrones. ~20-40 s.
+
+    El único endpoint que escribe `patterns.json`. Se cuenta acá y no en cada
+    turno porque el mismo error se corregiría dos veces —una en el turno, otra
+    en el análisis— y porque el cierre es lo único que ve la sesión completa y
+    sabe qué se repitió, que es la pregunta que el contador responde.
+    """
+    session = _open_or_404(payload.get("session_id"))
+    done = [t for t in session["turns"] if t["state"] == "done"]
+
+    analysis_result = None
+    if done:
+        try:
+            analysis_result = coach.close(session["topic"], session["level"],
+                                          session["turns"])
+        except llm.LLMError as e:
+            raise HTTPException(502, f"claude -p failed: {e}") from e
+
+    session["analysis"] = analysis_result
+    session["closed"] = True
+    session["closed_at"] = datetime.now().isoformat(timespec="seconds")
+    practice.save(session)
+
+    if analysis_result is None:
+        return {"session": session, "counted": [], "ready": []}
+
+    stored = practice.count(practice.read_patterns(), analysis_result["areas"],
+                            analysis_result["unmatched"], session["id"])
+    practice.write_patterns(stored)
+
+    counted = {a["pattern"] for a in analysis_result["areas"] if a["pattern"]}
+    rows = practice.listing(stored)
+    return {
+        "session": session,
+        "counted": [r for r in rows if r["key"] in counted],
+        "ready": [r for r in rows if r["ready"]],
+        "threshold": practice.PATTERN_THRESHOLD,
+    }
+
+
+@app.get("/api/practice/patterns")
+def practice_patterns() -> dict:
+    """El conteo entero. `unmatched` no es un contador: es lo que le falta al
+    catálogo, que es tuyo para ampliar."""
+    stored = practice.read_patterns()
+    return {
+        "patterns": practice.listing(stored),
+        "unmatched": stored["unmatched"],
+        "threshold": practice.PATTERN_THRESHOLD,
+    }
+
+
+@app.post("/api/practice/patterns")
+def practice_mark(payload: dict) -> dict:
+    """`carded` cuando ya escribiste la tarjeta, `reset` cuando no te importa.
+
+    Sin esto la fila te reclama la misma tarjeta para siempre.
+    """
+    try:
+        stored = practice.mark(practice.read_patterns(),
+                               str(payload.get("key", "")),
+                               str(payload.get("action", "")),
+                               practice.stamp())
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+    practice.write_patterns(stored)
+    return {"patterns": practice.listing(stored),
+            "threshold": practice.PATTERN_THRESHOLD}
 
 
 # Must go last: mounted at the root, it swallows the /api routes above it.
