@@ -6,7 +6,11 @@
 // had when this was part of app.js, so styles.css did not have to change —
 // only one view is mounted at a time, so the ids stay unique.
 
-import { $, el, getJSON, side } from "/ui.js";
+import { $, el, getJSON, side, waiting, working } from "/ui.js";
+
+// Medido contra la colección real: 19 s la última vez, y la nota del proyecto
+// dice 8–15. La barra corre hacia el 90 % en ese tiempo y espera ahí.
+const REPAIR_ESTIMATE_MS = 16000;
 
 const MARKUP = `
   <div class="panel-head">
@@ -47,22 +51,32 @@ function setBusy(busy, message) {
   document.querySelectorAll(".repair-open").forEach((b) => { b.disabled = busy; });
 }
 
-async function open(noteId, name) {
+async function open(noteId, name, fired) {
   proposal = null;
   $("repair").hidden = false;
   $("repair-title").textContent = `Reparar “${name}”`;
   $("repair-diagnosis").textContent = "";
   $("repair-rationale").textContent = "";
   $("repair-diff").replaceChildren();
-  setBusy(true, "Pensando… esto tarda unos segundos.");
+  setBusy(true, "Pensando… unos quince segundos.");
+  working(fired, true);
   $("repair").scrollIntoView({ block: "nearest" });
+
+  // La barra ocupa el hueco donde va a aparecer el antes/después. Hasta ahora
+  // acá había una frase quieta durante veinte segundos y un botón en gris:
+  // idéntico a una pantalla colgada.
+  const stop = waiting($("repair-diff"), REPAIR_ESTIMATE_MS);
 
   try {
     proposal = await getJSON(`/api/repair/${noteId}`, { method: "POST" });
   } catch (error) {
+    stop(false);
+    working(fired, false);
     setBusy(false, error.message);
     return;
   }
+  stop();
+  working(fired, false);
 
   $("repair-diagnosis").textContent = proposal.diagnosis;
   $("repair-rationale").textContent = proposal.rationale;
@@ -122,6 +136,6 @@ export function button(card, name) {
   if (!card.note_id) return null;
   const control = el("button", "ghost repair-open", "Reparar");
   control.type = "button";
-  control.addEventListener("click", () => open(card.note_id, name));
+  control.addEventListener("click", () => open(card.note_id, name, control));
   return control;
 }

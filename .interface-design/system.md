@@ -158,10 +158,28 @@ bottom edge.
 ### Rail segment (A1–C1)
 8px tall track · 3px radius · `--paper-inset` + `inset 0 0 0 1px --rule-faint` ·
 fill `--ink` at the maturity percentage · level letter mono 11 `--ink-4` below
-- empty level — transparent, hairline only, `opacity .4`. **The calendar's
-  "before you started" treatment.** A level you never began is not one you failed.
+- empty level — transparent, **hairline at full strength, no `opacity`**. A
+  level you never began is not one you failed, and the way to say that is *no
+  fill* — not an invisible track. See the 2026-08-27 decision.
 - current level — letter turns `--present`, plus a 2px `--present` bar 4px
-  below the track. The same mark today's cell carries.
+  below the track. The same mark today's cell carries. It is a **marker, not
+  part of the track**: never dim it, and never put an `opacity` on `.seg`,
+  which is its parent.
+
+The three marks have to stay tellable apart, because they answer three
+different questions and they sit 8px from each other:
+
+| Mark | Where | Says |
+|---|---|---|
+| ink fill | **inside** the track, from the left | how much of this level you hold |
+| outlined track, nothing inside | the track itself | you never started this level |
+| 2px `--present` bar | **below** the track, plus the letter | you are standing here |
+
+The cost of dropping the `.4`, taken knowingly: a level with cards at 0 %
+maturity and a level with no cards now differ only by the track's
+`--paper-inset` fill, where before the second was also 40 % dimmer. That
+reading is secondary and the row says it twice anyway — `—` against `0 %` on
+the right, `HUECO` against `0 % maduras` in the level's own head.
 
 ### Dashboard grid
 The Dashboard's four sections are cells of **one** two-column grid
@@ -287,6 +305,101 @@ mono 13/500 tabular · 8px 12px · 6px radius · `--paper-inset` on 1px `--rule-
 ### Grace note
 13px · `--kraft` on `--kraft-dim` · 8px 12px · 6px radius · `max-width: 48ch`
 
+### Section rhythm
+Every `.panel` carries `margin-top: --s7`; grid parents (`.columns`, `.col`,
+`.dash`) reset it to zero because their `gap` already spaces them. It sits on
+the panel and **not** on the `+` pair: Agregar has a hidden `div` between two
+panels, and an adjacent-sibling selector does not step over it — which is
+exactly how the candidates table ended up glued to the Generar button, and the
+topic picker on Hoy ended up touching the grid below it at **zero** pixels.
+Adjacent margins collapse, so this never adds to the hero's own `--s6`.
+
+### Hero note (`.hero-note`) and panel note (`.panel-note`)
+The sentence that says what a screen is for. `.sub` is the mono uppercase
+label; a whole sentence in it is a wall nobody reads, and in Práctica it also
+landed in the hero grid's `auto` column and squeezed the h1 into four lines of
+two words. `.hero-note` spans the row: 15px, `--ink-3`, `68ch`, `text-wrap:
+pretty`. `.panel-note` is the same idea under a panel head — 15px `--ink-2`,
+`72ch`. Before it existed, panels borrowed `.panel-meta`, which is the **flex
+row of a head**, not a paragraph: it worked by luck, on a single text node.
+
+### A row with three things is three columns
+`.rows li` is flex, which is right for name + figure. With a third thing — a
+deck's tag, a Estudiar button — every cell starts where the last one ended, so
+no column lines up between rows and the right edge comes out ragged. `.deck-row`
+(`1fr 11rem 15rem`) and `.level-row` (`1fr auto 6rem`) are real grids, and the
+action cell **always exists**, empty when there is nothing to open: that is the
+only way the figures land on one vertical in the row that has a button and in
+the one that does not. Both need `.rows li.deck-row` specificity — `.rows li`
+is (0,1,1) and beats a bare class.
+
+The candidates table takes the same medicine from the other side: its columns
+are fixed at both ends (`16px 1fr 1fr 1.4fr 9rem`) so `FRONT · BACK · EJEMPLO`
+sits over its own columns. With `auto` at the ends, the free space the middle
+three share changed with whatever was in the last cell — "editar" in a row,
+nothing in the header — and the header floated off its columns by 15px.
+
+### Holes, grouped (Progreso)
+One row per **skill**, not one per level, and the levels that are missing are
+chips that link to `#/agregar/<skill>/<level>`. Twenty rows saying "sin mazos"
+twenty times put the same word in the column where the information goes, and
+made the tallest panel on the screen the one that said least. The panel head
+promises "lo próximo a generar"; now the row does that.
+
+### Pattern meter (Patrones)
+The rail's vocabulary again, counting sessions toward the card: `.meter` +
+`.meter-fill` at `count / threshold`, capped at 20rem. Without it the screen
+was seven blocks of identical texture and the `2/3` on the right was the only
+thing telling them apart — the figure said how far and nothing showed it. A
+pattern already carried to Agregar that has not come back is `data-empty`:
+unmarked paper, the same treatment as a level you never started.
+
+`.meter` is `display: block`. As an inline `span` its 8px height does not
+apply — it only ever worked because on Hoy and the Dashboard it happens to be
+a grid child.
+
+### The wait (`ui.waiting`, `ui.working`)
+Seven calls reach the model, and each one used to tell the wait its own way:
+two had the honest bar, three had a sentence that did not move, and in all
+seven the button that fired it went grey at 45 % — which is how this system
+draws **"you can't"**, not **"I'm thinking"**. That is the whole complaint:
+from the outside, working and frozen looked identical.
+
+Two rules, both already written elsewhere in the project and now applied
+everywhere:
+
+- **The bar occupies the space the answer will fill.** The repair panel's
+  before/after, the terms list, the syllabus points, the composer. Not under
+  the button — where the answer is going to land, which is where you are
+  already looking.
+- **The sentence goes beside the button you pressed**, and it names the
+  measured cost: "unos quince segundos", "cerca de medio minuto".
+
+`waiting(container, estimate, before?)` inserts the track, runs it to **90 %**
+over the measured estimate and waits there — a bar that reaches 100 % and keeps
+waiting is worse than none — and returns `stop(ok)`: complete and remove, or
+just remove when what arrived was an error. `working(button, on)` keeps the
+button disabled but at full ink with `cursor: progress`. Anything genuinely
+unavailable keeps the 45 % grey, and the two states now sit side by side in the
+composer: `Enviar` thinking, `Cerrar y analizar` disabled.
+
+Measured estimates, one constant per call site, each with its number in a
+comment: term 15s · repair 16s · turn 18s · close 32s · coverage 30s ·
+freezing a syllabus 110s.
+
+The track is `display: block`. As an inline `span` its 8px height does not
+apply — which is why the composer's bar, designed for exactly this, **had never
+rendered once**: twenty-one seconds with no message on screen and no bar.
+
+### The loading line
+Reading the collection costs 1–2 s measured, and the screen was blank for all
+of it: the missing state on six screens. `#loading` lives in the shell, not in
+`#view` — the view replaces its own markup on mount and would wipe it — and
+shows after **250 ms**, so `/api/settings` and `/api/practice/patterns` (2 ms)
+never flash it. Mono 11 uppercase `--ink-4`, on the same baseline and left edge
+the date kicker will take, so it reads as the page's own first line. A line and
+not a skeleton: drawing fake rows promises a shape that may not arrive.
+
 ## Motion
 
 Only Hoy and the Dashboard animate, and only on load. The review flow gets
@@ -304,6 +417,18 @@ decks or struggling cards changes the step, never the total.
 | Skill meters | `scaleX [0,1]` from the left, staggered, `outQuad` |
 | Today's ring | `stroke-dashoffset` from empty to its share over 300ms, `outExpo` |
 | Streak | counts up to its value over 300ms, `outExpo`; skipped at zero — the pill on Hoy, the stat on the Dashboard |
+| A1–C1 rail (Progreso, skill) | `scaleX [0,1]` from the left, staggered, `outQuad` — the Dashboard meter's vocabulary, same budget |
+| Pattern meters (Patrones) | the same, plus the rows on `opacity` + `y` |
+| A turn arriving (Práctica) | the **last** block only, `opacity [0,1]` + `y [8,0]`, 190ms `outQuad` |
+| The closing analysis (Práctica) | its blocks cascade in, staggered inside the same 300ms |
+
+The rule that decides whether a thing may animate is unchanged: **anything you
+cross a hundred times gets nothing.** The review flow still gets nothing, and
+navigation itself is not animated. What was added is on the other side of that
+line — a rail you look at once when you open Progreso, and the two moments in
+the practice where you have been *waiting*: seventeen seconds for a turn, half
+a minute for the close. There the entrance is what says "this is the new part";
+without it, a block of text appears mid-screen with nothing to say it arrived.
 
 `scaleY`/`scaleX` and not `height`/`width`: the bars and the meters would
 reflow their whole row on every frame. `stroke-dashoffset` is the one property
@@ -406,6 +531,20 @@ easy case; these are the ones that decide whether it feels encouraging.
 
 | Decision | Rationale | Date |
 |---|---|---|
+| A class that only wins by source order is a bug waiting | Three pieces were being painted as something they are not, all by the same mechanism: `.rows li` (0,1,1) beat `.deck-row` so the grid never applied and the rows stayed flex; `.composer-foot button` (0,1,1) beat `.ghost` so **"Cerrar y analizar" was drawn as a filled primary next to "Enviar"** — two primary actions in one row and the accent spent twice, against a rule this system states outright. The precedent was already written down for `.actions button` in 2026-08-26 and it was not read as a class of bug. Anything a component overrides now carries the parent's specificity: `.rows li.deck-row`, `.composer-foot button.ghost`. | 2026-08-27 |
+| The section rhythm sits on the panel, not on the `+` pair | The topic picker on Hoy touched the grid below it at **zero** pixels against 48 everywhere else, and the candidates table sat glued to the Generar button. Adjacent-sibling rules fixed the first and not the second: Agregar has a hidden `div` between two panels and `+` does not step over it. `margin-top` on `.panel`, reset inside grid parents, holds regardless of what is hidden between them. | 2026-08-27 |
+| The sentence of a screen is prose, not a label | `.sub` — mono, uppercase, 11px, tracked — was carrying whole sentences in the Práctica and Patrones heroes. Two costs: uppercase tracked mono is the hardest thing on the page to read, and in the hero grid it landed in the `auto` column and squeezed the h1 into **four lines of two words**. `.hero-note` and `.panel-note` are the prose sizes; `.sub` goes back to being a label. | 2026-08-27 |
+| A hole gets an action, not a repeated word | "Huecos de la colección" was twenty rows saying "sin mazos" twenty times — the same word in the column where the information goes, in the tallest panel of the screen. One row per skill, and the missing levels are chips that go to Agregar carrying the level. The panel head said "lo próximo a generar" all along; now the row does it. | 2026-08-27 |
+| A never-recorded sync is not a failure | Ajustes drew "todavía sin registrar" in `--alarm`, next to two healthy connections. Red here is reserved for what actually broke — an absence is not a failure, and a false alarm on the screen whose whole job is to report real ones is the worst place to spend it. | 2026-08-27 |
+| The escape hatch does not take the accent | "Abrí el diálogo de Anki" was `--present` on a screen that already spends it on Generar. The accent means the primary action or the here and now; a link out to Anki is neither. Ink plus the underline. | 2026-08-27 |
+| A level screen is a column, not a grid | Five level panels in two columns left an **800px hole** beside A2 — A1 carries twelve decks and A2 two, so the second row waited for the first — and it broke the reading order the screen is about: A1 → C1, the same as the rail above it. The Dashboard's row alignment stays; it has four named sections that are peers, and this has a sequence. | 2026-08-27 |
+| The focus ring follows the shape it rings | `:focus-visible` set `border-radius: 2px`, which applies to the **element**, not to the outline: a hand-drawn button snapped to a rectangle in the very frame the keyboard pointed at it. | 2026-08-27 |
+| A list must be ordered by what its heading says | "Vengo fallando" on Hoy was ordered by time lost: measured, **87 % of the score was time and 9 % was failures**, so a card failed 2 of 11 times led the list and one failed 9 of 11 sat twelfth. The heading had been right since day one; the list was answering another question. Hoy now orders by failures among what you have reviewed this week, Atascos keeps the cost ranking its own heading promises ("ordenadas por tiempo perdido"), and each row on Hoy carries its topic under the front — the complaint that started it was "it shows me cards from topics I'm not studying", and without the deck on screen there is no way to check that. | 2026-08-27 |
+| A one-click state change needs a way back | "Hacer tarjeta" marked the pattern as carded on the click — it is a link, not a commitment, and the app cannot know whether you then wrote anything. One accidental click and a pattern that did need a card stopped asking, permanently: the only two actions on offer both switched the counter off. A carded row now carries "Todavía no la hice". It costs nothing because clearing never deleted history — the count is derived from the session list, so moving the line back restores it whole. | 2026-08-27 |
+| A file the app cannot read is a system failure, and gets the red | Ajustes lists the frozen syllabi and turns red when one of them does not parse — the same treatment "Anki sin respuesta" gets, and for the same reason: it is the app failing to read, not a state of the person. The panel is titled "lo que falla en silencio" and this was the loudest silent failure left: a broken syllabus was only discovered once it had already been regenerated over. Zero syllabi stays neutral — none yet is an absence, not a failure. | 2026-08-27 |
+| A stored answer is shown with its date, and never refreshed behind your back | The coverage of a syllabus costs 35s and was recomputed on **every** open, even when nothing had changed. Now it is stored, and the panel's first line says what you are looking at *and when it was measured* — "6 de 18 puntos cubiertos · calculada hoy" — because a cached answer and a fresh one otherwise read identically, and the one that costs half a minute is the second. When your decks have changed the marks stay on screen, dated, next to an "Actualizar": erasing what you already knew to draw "nobody has looked yet" would be knowing less than a minute ago. It never recomputes on its own. | 2026-08-27 |
+| Waiting is a state, and it was missing | Six screens read Anki for 1–2 s and showed nothing at all while they did. See the loading line above. | 2026-08-27 |
+| "Working" and "disabled" may not look the same | Reported as *"I can't tell whether the app is frozen or loading"*, and it was fair: the button that fired a model call went to the same 45 % grey as a button that does nothing, and three of the seven call sites had no moving thing at all. Measured on a real session: at second 5 of a 21.3s turn the screen held **nothing** — the message was gone from the box and not yet in the thread, and the bar that was designed for that moment had never rendered (inline `span`, height 0). See "The wait" above. | 2026-08-27 |
 | Every example in the closing analysis carries its fix | The areas listed `tink`, `becouse`, `whithout` — where you went wrong, never what belonged there. By the time you read the analysis the sentence around that fragment is six turns and twenty minutes behind you, so a bare fragment is unreadable in the language you are learning. Examples became `{wrong, right}` pairs drawn with the same word-level diff, stacked rather than in two columns: six areas of three examples is eighteen cases, and eighteen double plates turn a summary into a wall. The corrected line takes the `--rule-blue` edge, which is what "correct" already means on this screen. | 2026-08-26 |
 | An uncounted finding says so | A finding whose pattern is not in the catalogue does not count toward a card, and was drawn identically to one that does — a habit the analysis itself called critical read exactly like the rest while the counter ignored it. It now carries a mono `--ink-4` note. No colour: it is a gap in the catalogue, not a failure of yours. | 2026-08-26 |
 | The changed words are marked; the block is not coloured | The ask was red for the error and green for the correction, and the reason behind it was the real finding: *"no sé inglés, sólo puedo adivinar lo que dices."* Two similar paragraphs side by side and finding the difference is left to the reader — in the language they are learning. Colouring the whole block does not answer that: it says which side is which, which the labels and the ✕/✓ already say. What answers it is a word-level LCS diff, so only what actually changed is marked. It rises by weight and ink while the rest of the value drops to `--ink-3`; the wrong side had to stop dimming with `opacity`, since opacity takes its children with it and the marked word could never come back up. Red stays what it has always been here: a failure of the system, never a state of the person. | 2026-08-26 |
@@ -420,7 +559,7 @@ easy case; these are the ones that decide whether it feels encouraging.
 | ~~No sidebar~~ → **left sidebar** | Reversed, because the premise changed rather than the taste. The sidebar was cut when navigation was two links and a column would have been furniture around an empty room. With Progreso, five skill libraries, Mazos, Atascos and Ajustes it is ten destinations, and ten links across one bar is a navigation product. Navigation only: no account, no plan, no brand mark beyond the wordmark. | 2026-08-18 |
 | The accent means two things: the primary action, and here-and-now | It was on `#start` and today's calendar mark. Adding the current rail segment and the current sidebar item does not spend a second accent — it says the same word in three places. The rule to hold is the *meaning*, not the count of usages: nothing else may take `--present`. | 2026-08-18 |
 | The active sidebar item is a 2px inset rule, not a fill | `--paper-inset` on `--paper` is two steps of lightness and reads as nothing. A rule of ink down the left edge is the index card's own margin rule, and it is the same mark today's cell carries under it. | 2026-08-18 |
-| A level with no cards is drawn like a day not studied | Same emotional premise, same treatment: transparent, hairline only, `opacity .4`. A level you never started is not a level you failed, exactly as a day before you began is not a day you missed. | 2026-08-18 |
+| ~~A level with no cards is drawn like a day not studied~~ → **the premise stays, the `opacity` goes (rail only)** | Half reversed on 2026-08-27, and the report was "does the blue underline mean A1 is completed, with no cards in it?" — asked about Writing, whose five levels are all empty. Two faults, one symptom. The hairline is `--rule-faint`; in dark mode that is `rgba(255,255,255,.07)`, and at 40 % it lands on ~3 % white, so **the track was not visible at all** and the only thing on screen was the accent bar of the current level, floating with nothing to compare it to — and a lone bar reads as a fill. Worse, the `opacity` sat on `.seg`, and the accent bar is `.seg::after`: the "you are here" mark was itself being drawn at 40 %, on the one screen where it is the only mark there is. The emotional premise is unchanged and is now carried by the *absence of fill*, which is what it always meant; an invisible track was never the point. Single-bar meters (`.meter[data-empty]`) keep the `.4`: they carry no marker inside and have no siblings to be compared against, which are the two things that made it illegible here. | 2026-08-27 |
 | Severity on the stuck cards is a mono label, never a colour | Where every default design reaches for red/amber/green. The list is already ordered by time lost, so colour adds no information and does add a verdict. | 2026-08-18 |
 | A day not studied is paper, not a hole | The whole emotional premise. Empty cells carry no border and no fill, so absence never accuses. This is what rules out the contribution-graph pattern. | 2026-08-18 |
 | ~~Red means the present~~ → **the accent is writing ink, `#2a5580`** | Reversed. Two problems with the red. Red reads as danger or error in every interface anyone has used, and `Empezar` is the most positive action on the screen. And `--present` `#b23a2e` sat ten degrees of hue from `--alarm` `#a8342a`, so the action colour and the error colour were nearly indistinguishable — the accent was competing with the one thing that must never be missed. Blue-black ink is just as native to the index-card world and carries none of that. **Red is now reserved entirely for `--alarm`.** | 2026-08-18 |
@@ -435,7 +574,15 @@ easy case; these are the ones that decide whether it feels encouraging.
 
 ## Consistency checks
 
-- Spacing on the 4px grid. No raw px outside the `--s*` scale.
+- Spacing on the 4px grid. No raw px outside the `--s*` scale. No `style=` in
+  markup either — the one that existed (`margin-top` on a second panel head)
+  was the only pixel in the app that came from outside the scale.
+- **Check the specificity of anything you override.** `.rows li`,
+  `.actions button` and `.composer-foot button` are all (0,1,1) and beat a bare
+  class; three separate pieces have already been painted wrong by this.
+- A row with three things gets three columns. Two is what `.rows li` is for.
+- New interactive elements get hover, active and `:focus-visible` — and the
+  press feedback (`scale(.975)`, 110ms) that every other button has.
 - Borders-only. If a shadow appears, it is a bug (the one inset hairline aside).
 - Colours from the palette above. No literal hex in component rules.
 - `[hidden] { display: none !important; }` must stay: the page toggles four

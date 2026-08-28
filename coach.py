@@ -17,6 +17,8 @@ el catálogo de patrones — cuarenta y pico de entradas — viaja sólo en el
 segundo: pagarlo en cada turno es pagarlo veinte veces por una identidad que
 sólo hace falta donde se cuenta.
 """
+import re
+
 import llm
 
 SYSTEM_PROMPT = (
@@ -341,8 +343,30 @@ PATTERN_BY_KEY = {p["key"]: p for p in PATTERNS}
 # Importing them would pull in `anki` through `generate`, and this module has to
 # work with Anki closed. Three lines each is a cheaper price than that coupling.
 
+# El andamiaje del propio modelo, colándose adentro de un string.
+#
+# Una corrida real devolvió el resumen y, pegado al final, `</summary>
+# <parameter name="strengths">["Sostuviste una conversación…` — sintaxis de
+# llamada a herramienta metida dentro del valor JSON. El esquema lo aceptó,
+# porque el campo es un string y eso era un string, así que llegó entero a la
+# pantalla; y `strengths` volvió vacío, porque el modelo creyó que ya lo había
+# escrito ahí adentro.
+#
+# Se corta en la primera marca. Sólo estas palabras y no cualquier `<...>`:
+# alguien puede escribir `<field name="x">` en una práctica sobre su trabajo, y
+# eso es contenido de la conversación, no andamiaje.
+_LEAK = re.compile(
+    r"</?\s*(?:antml:)?(?:summary|strengths|areas|turns|parameter|parameters|"
+    r"function_calls|function_results|invoke|result)\b[^>]*>",
+    re.IGNORECASE)
+
+
 def _clean(value, limit: int) -> str:
-    return " ".join(str(value or "").split())[:limit]
+    text = str(value or "")
+    leak = _LEAK.search(text)
+    if leak:
+        text = text[:leak.start()]
+    return " ".join(text.split())[:limit]
 
 
 def _canonical(value, allowed: tuple) -> str:

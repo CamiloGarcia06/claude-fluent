@@ -131,7 +131,10 @@ body {
 }
 
 a { color: inherit; }
-:focus-visible { outline: 2px solid var(--present); outline-offset: 2px; border-radius: 2px; }
+/* El contorno sigue la forma de la pieza. Fijar un radio acá se lo aplicaba al
+   elemento —no al contorno—, así que un botón de esquinas dibujadas saltaba a
+   rectángulo justo en el cuadro en que el teclado lo señalaba. */
+:focus-visible { outline: 2px solid var(--present); outline-offset: 2px; }
 
 /* ── Sidebar ──────────────────────────────────────────────────────────
    Secondary by instruction: you did not come here to navigate. It went to
@@ -248,6 +251,42 @@ main {
   padding: var(--s7) var(--s5) var(--s7);
 }
 
+/* Un panel respira lo que respira todo lo demás. Sin esto el elector de temas
+   de Hoy tocaba la rejilla de abajo —cero píxeles contra los 48 de cualquier
+   otro par de la pantalla—, en Progreso los huecos arrancaban pegados al riel
+   y en Agregar la tabla de candidatas quedaba pegada al botón de Generar.
+
+   Va sobre el panel y no sobre el par `+`: entre dos paneles de Agregar hay un
+   div oculto, y un selector de hermano adyacente no lo salta. Los márgenes
+   contiguos colapsan, así que sumarlo al `margin-bottom` del hero no da 80.
+   Dentro de una rejilla el hueco ya lo pone `gap`, y ahí vuelve a cero. */
+.panel { margin-top: var(--s7); }
+.panel + .columns,
+.columns + .panel { margin-top: var(--s7); }
+
+.columns > .panel,
+.col > .panel,
+.dash > .panel { margin-top: 0; }
+
+/* Mientras la colección viaja. Uno o dos segundos medidos, y la pantalla
+   estaba en blanco todos ellos: el estado que faltaba en seis pantallas.
+   Aparece recién a los 250 ms —las que contestan rápido nunca lo muestran— y
+   es una línea y no un esqueleto: dibujar filas falsas es prometer una forma
+   que a lo mejor no llega. */
+.loading {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: var(--s7) var(--s5) 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  animation: fade-in 200ms cubic-bezier(.23, 1, .32, 1) both;
+}
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
 /* ── Anki is not answering. The only other place red is allowed. ────── */
 .offline {
   margin: 0;
@@ -324,6 +363,23 @@ h1 {
   font-size: 13px;
   color: var(--ink-3);
 }
+
+/* La frase que explica de qué va la pantalla. `.sub` es la etiqueta mono en
+   versalitas: una oración entera ahí es un muro que nadie lee, y en Práctica
+   además caía en la columna `auto` de la rejilla del hero y estrujaba el
+   titular hasta dejarlo en cuatro líneas de dos palabras. */
+.hero-note {
+  grid-column: 1 / -1;
+  margin: var(--s4) 0 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink-3);
+  max-width: 68ch;
+  text-wrap: pretty;
+}
+/* Y una red por si vuelve a colarse una etiqueta en el hero: que ocupe su
+   propia fila en vez de comerse el ancho del titular. */
+.hero .sub { grid-column: 1 / -1; }
 
 .hero-foot {
   grid-column: 1 / -1;
@@ -425,6 +481,10 @@ h1 {
 }
 .goal-unit { font-size: 13px; color: var(--ink-3); }
 
+/* La segunda cabecera de un panel, cuando el panel lleva dos temas. Era un
+   `style=` en el markup: el único píxel del app que no salía de la escala. */
+.dials-head { margin-top: var(--s7); }
+
 /* ── El elector de temas ──────────────────────────────────────────────
    Un tema es un mazo, así que elegir "Phrasal verbs" y abrir ese mazo son la
    misma cosa. Fichas y no una lista: son pocas y se eligen de un vistazo. */
@@ -487,6 +547,13 @@ h2 {
   letter-spacing: 0;
   color: var(--ink);
 }
+/* Con tres cosas en la cabecera, `space-between` dejaba la del medio flotando
+   en ninguna parte: "26 mazos" a un tercio del ancho, ni con el título ni con
+   la acción. La etiqueta pertenece al título, así que el hueco se junta
+   después de ella. Sólo cuando no es la última: con dos, el reparto a los
+   extremos es exactamente lo que se quiere. */
+.panel-head > .sub:not(:last-child) { margin-right: auto; }
+
 .panel-head a {
   font-size: 12px;
   color: var(--ink-3);
@@ -723,6 +790,7 @@ h2 {
   white-space: nowrap;
 }
 .meter {
+  display: block;
   height: 8px;
   border-radius: var(--r-sm);
   background: var(--paper-inset);
@@ -852,6 +920,45 @@ h2 {
 .ghost:hover:not(:disabled) { color: var(--ink); background: var(--paper-inset); }
 button:disabled { opacity: 0.45; cursor: default; }
 
+/* "Trabajando" no es "deshabilitado", y se dibujaban igual. Un botón en gris al
+   45 % dice "esto no está disponible"; el que acaba de disparar una llamada al
+   modelo tiene que decir "estoy pensando en eso que apretaste". Sigue sin
+   poder apretarse —la llamada tarda entre quince segundos y dos minutos— pero
+   conserva su tinta, y quien cuenta el tiempo es la barra, que aparece en el
+   lugar donde va a aparecer la respuesta. */
+button[data-working="true"]:disabled { opacity: 1; cursor: progress; }
+
+/* La pista de espera, cuando no vive en una rejilla que le dé su lugar. */
+.wait { margin-top: var(--s4); }
+/* En el compositor el hueco ya lo pone el margen inferior de la caja de texto,
+   así que aparecer no mueve la fila de botones más que sus propios 8 px. */
+.composer .wait { margin-top: 0; }
+
+/* Todo lo que se aprieta contesta igual: 110 ms de escala y nada más. Faltaba
+   en la mitad de los botones —el pie de Agregar, el compositor, las fichas— y
+   un botón que no acusa el clic se siente roto justo donde más se usa. Los
+   colores entran por transición por lo mismo: un hover que salta es un
+   parpadeo, uno que llega en 140 ms es una respuesta. */
+.ghost,
+.chip,
+.pick,
+.cand-edit,
+.gen-foot button,
+.composer-foot button,
+.syllabus-open,
+.actions a.ghost {
+  transition: filter 140ms cubic-bezier(.23, 1, .32, 1),
+              transform 110ms cubic-bezier(.23, 1, .32, 1),
+              color 140ms cubic-bezier(.23, 1, .32, 1),
+              border-color 140ms cubic-bezier(.23, 1, .32, 1),
+              background-color 140ms cubic-bezier(.23, 1, .32, 1);
+}
+.ghost:active:not(:disabled),
+.chip:active:not(:disabled),
+.gen-foot button:active:not(:disabled),
+.composer-foot button:active:not(:disabled),
+.actions a.ghost:active { transform: scale(0.975); }
+
 .repair-open { flex: none; align-self: center; }
 
 /* ── Deck and struggling rows ─────────────────────────────────────────
@@ -884,6 +991,42 @@ button:disabled { opacity: 0.45; cursor: default; }
   font-variant-numeric: tabular-nums;
   color: var(--ink-3);
   white-space: nowrap;
+}
+
+/* ── Filas de tres columnas ───────────────────────────────────────────
+   `.rows li` es flex, que alcanza cuando la fila es nombre + cifra. Con una
+   tercera cosa —la etiqueta del mazo, el botón de estudiar— cada celda empieza
+   donde terminó la anterior, así que ninguna columna se alinea entre filas y
+   el margen derecho queda dentado. Donde hay tres cosas, hay tres columnas.
+
+   La celda de la acción existe **siempre**, vacía cuando no hay nada que
+   abrir: es la única forma de que las cifras caigan en la misma vertical en la
+   fila que lleva botón y en la que no. */
+.rows li.deck-row {
+  display: grid;
+  grid-template-columns: 1fr 11rem 15rem;
+  align-items: baseline;
+  gap: var(--s4);
+}
+.deck-row .tag,
+.deck-row .count { text-align: right; }
+
+.rows li.level-row {
+  display: grid;
+  grid-template-columns: 1fr auto 6rem;
+  align-items: baseline;
+  gap: var(--s4);
+}
+.level-row .count { text-align: right; }
+.level-row .ghost { justify-self: end; }
+
+@media (max-width: 880px) {
+  .rows li.deck-row { grid-template-columns: 1fr auto; }
+  .deck-row .name  { grid-area: 1 / 1; }
+  .deck-row .count { grid-area: 1 / 2; }
+  .deck-row .tag   { grid-area: 2 / 1 / auto / -1; text-align: left; }
+  .rows li.level-row { grid-template-columns: 1fr auto; }
+  .level-row .ghost { grid-area: 2 / 2; }
 }
 
 .empty {
@@ -942,9 +1085,28 @@ h2 .rail-chip { margin-left: var(--s2); }
   height: 100%;
   border-radius: var(--r-sm);
   background: var(--ink);
+  transform-origin: left;   /* la entrada escala, nunca anima el ancho */
 }
-/* A level you never started is not a level you failed. */
-.seg-wrap[data-state="empty"] .seg { background: transparent; opacity: 0.4; }
+/* A level you never started is not a level you failed: sin relleno, sólo el
+   filete. Y el filete **entero**, sin `opacity`, por dos motivos que salieron
+   del mismo síntoma — Writing, con sus cinco niveles vacíos, se leía como si
+   A1 estuviera completado.
+
+   El filete es `--rule-faint`; en oscuro eso es rgba(255,255,255,.07), y al
+   40 % quedaba en un 3 % de blanco: la pista no se veía. Lo único visible era
+   la raya azul del nivel actual, flotando sin nada con qué compararse, y una
+   raya sola se lee como un relleno. Con la pista visible, la raya vuelve a
+   leerse como lo que es: un marcador **debajo** de una pista vacía.
+
+   Y la opacidad se llevaba puesta a esa raya, que es hija de `.seg`: la marca
+   de "estás acá" salía al 40 % justo en el nivel donde más falta hace. El
+   acento no se atenúa nunca. **No devuelvas `opacity` acá** — si algún día hay
+   que bajar más la pista, bajala por color, o la marca se apaga con ella.
+
+   Los medidores de una sola barra (`.meter[data-empty]`) conservan su 40 %: no
+   llevan marca adentro y no se comparan con cuatro hermanas al lado, que son
+   las dos cosas que acá lo hacían ilegible. */
+.seg-wrap[data-state="empty"] .seg { background: transparent; }
 
 .seg-label {
   font-family: var(--mono);
@@ -989,11 +1151,28 @@ h2 .rail-chip { margin-left: var(--s2); }
 }
 .termbox::placeholder { color: var(--ink-4); }
 
+/* La escotilla vive fuera de todo panel, así que necesita su propio aire: sin
+   esto quedaba pegada a la última candidata, como si fuera una fila más. */
+.panel + .sub-note { margin-top: var(--s6); }
+
 .sub-note {
   margin: var(--s3) 0 0;
   font-size: 13px;
   color: var(--ink-3);
   max-width: 72ch;
+}
+
+/* La bajada de un panel. Venía dibujándose con `.panel-meta`, que es la fila
+   flex de una cabecera y no un párrafo: dos piezas distintas bajo el mismo
+   nombre, y la segunda funcionaba de casualidad —un solo nodo de texto dentro
+   de un contenedor flex—. Con dos hijos se habría partido en columnas. */
+.panel-note {
+  margin: var(--s3) 0 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  max-width: 72ch;
+  text-wrap: pretty;
 }
 
 /* Los términos propuestos, con su porqué. Dos columnas de verdad y la frase
@@ -1026,7 +1205,14 @@ h2 .rail-chip { margin-left: var(--s2); }
   padding: var(--s2);
 }
 .gen-term { font-size: 15px; color: var(--ink); }
+/* Bloque, no `span` en línea: con `display: inline` la altura de 8px no se
+   aplica y la barra mide cero. En Agregar se salvaba de rebote —ahí la pista es
+   hija de una rejilla, que la bloquea—, pero en el compositor de la práctica
+   es hija de un div normal, así que **la barra de espera del turno nunca se
+   dibujó**: veintiún segundos sin tu mensaje en pantalla y sin barra. Es el
+   mismo error que tenía `.meter` en Patrones. */
 .gen-track {
+  display: block;
   height: 8px;
   border-radius: var(--r-sm);
   background: var(--paper-inset);
@@ -1060,7 +1246,7 @@ h2 .rail-chip { margin-left: var(--s2); }
 .cands { display: grid; gap: 0; margin-top: var(--s4); }
 .cand-row {
   display: grid;
-  grid-template-columns: auto 1fr 1fr 1.4fr auto;
+  grid-template-columns: 16px 1fr 1fr 1.4fr 9rem;
   align-items: baseline;
   gap: var(--s4);
   padding: var(--s3) var(--s2);
@@ -1111,15 +1297,20 @@ h2 .rail-chip { margin-left: var(--s2); }
   white-space: nowrap;
 }
 
+/* La escotilla al diálogo de Anki. Llevaba `--present` y era un segundo
+   acento en una pantalla que ya lo gasta en "Generar": el azul acá significa
+   la acción primaria o el aquí y ahora, y esto no es ninguna de las dos. Baja
+   a tinta y se queda con el subrayado, que es lo que dice "enlace". */
 .linkish {
   font: inherit;
-  color: var(--present);
+  color: var(--ink-2);
   background: none;
   border: 0;
   padding: 0;
   cursor: pointer;
   text-decoration: underline;
 }
+.linkish:hover { color: var(--ink); }
 
 .cand-text { font-size: 15px; color: var(--ink); overflow-wrap: anywhere; }
 .cand-example .cand-text { font-size: 13px; color: var(--ink-3); }
@@ -1130,6 +1321,13 @@ h2 .rail-chip { margin-left: var(--s2); }
 /* Ya la tenés: se muestra, apagada. Esconderla dejaría la duda de si el
    modelo la olvidó o si ya existía. */
 .cand-row[data-dup="true"] { opacity: 0.55; }
+
+/* La última columna es fija, así que lo que va en ella se acomoda a su ancho:
+   "editar" a la derecha, y el aviso de duplicada partiendo en dos líneas en
+   vez de empujar la tabla. */
+.cand-row > .cand-edit,
+.cand-row > .tag { justify-self: end; text-align: right; }
+.cand-row > .tag { white-space: normal; }
 
 .cand-edit {
   font: 400 12px/1 var(--font);
@@ -1206,7 +1404,7 @@ h2 .rail-chip { margin-left: var(--s2); }
 @media (max-width: 880px) {
   .gen-row { grid-template-columns: 1fr auto; }
   .gen-track { grid-column: 1 / -1; }
-  .cand-row { grid-template-columns: auto 1fr auto; }
+  .cand-row { grid-template-columns: 16px 1fr auto; }
   .cand-example { grid-column: 2 / -1; }
 }
 
@@ -1238,6 +1436,8 @@ h2 .rail-chip { margin-left: var(--s2); }
 }
 
 .filters { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s4); }
+/* Un filtro pegado a su lista se lee como la primera fila de la lista. */
+.filters + .rows { margin-top: var(--s4); }
 .chip {
   font: 500 12px/1 var(--font);
   color: var(--ink-3);
@@ -1268,6 +1468,46 @@ h2 .rail-chip { margin-left: var(--s2); }
 /* The one place a row may go red: a connection that is down is a failure of
    the system, which is exactly what --alarm is reserved for. */
 .count[data-ok="false"] { color: var(--alarm); }
+
+/* ── Los huecos de la colección ───────────────────────────────────────
+   Eran veinte filas que decían "sin mazos" veinte veces: la misma palabra
+   repetida en la columna donde tendría que ir la información, y el panel más
+   alto de la pantalla dedicado a lo que menos dice. Ahora es una fila por
+   habilidad y los niveles que faltan son fichas que llevan a generarlos —que
+   es lo que la cabecera del panel viene prometiendo, "lo próximo a generar". */
+.rows li.gap-row {
+  display: grid;
+  grid-template-columns: 13rem 1fr;
+  align-items: center;
+  gap: var(--s4);
+}
+.gap-levels {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--s2);
+}
+.gap-level {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.10em;
+  color: var(--ink-3);
+  text-decoration: none;
+  border: 1px solid var(--rule-faint);
+  border-radius: var(--r-rough-alt);
+  padding: var(--s1) var(--s2);
+  transition: color 140ms cubic-bezier(.23, 1, .32, 1),
+              border-color 140ms cubic-bezier(.23, 1, .32, 1),
+              background-color 140ms cubic-bezier(.23, 1, .32, 1);
+}
+.gap-level:nth-child(even) { border-radius: var(--r-rough); }
+.gap-level:hover { color: var(--ink); background: var(--paper-inset); border-color: var(--rule); }
+
+@media (max-width: 880px) {
+  .rows li.gap-row { grid-template-columns: 1fr; gap: var(--s2); }
+  .gap-levels { justify-content: flex-start; }
+}
 
 /* ── El temario de un nivel ────────────────────────────────────────────
    La lista responde una pregunta distinta de la barra de madurez, así que se
@@ -1408,6 +1648,18 @@ h2 .rail-chip { margin-left: var(--s2); }
   text-decoration: none;
 }
 .actions a.primary:active { transform: scale(0.975); }
+
+/* Un secundario no puede ser más ancho que el primario que tiene al lado: el
+   nombre del tema viaja dentro de la etiqueta y "test a new feature in
+   claude-fluent" hacía un botón de cuatrocientos píxeles junto a uno de cien.
+   Se corta con puntos suspensivos; el nombre entero sigue en el `title`. */
+.actions button,
+.actions a {
+  max-width: 22rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .chips {
   display: flex;
@@ -1598,14 +1850,37 @@ h2 .rail-chip { margin-left: var(--s2); }
   cursor: pointer;
 }
 .composer-foot button:hover:not(:disabled) { filter: brightness(1.08); }
+
+/* "Cerrar y analizar" salía pintado de primario al lado de "Enviar": dos
+   acciones primarias en la misma fila, que es justo lo que este sistema
+   prohíbe, y encima con el acento gastado dos veces. Es el mismo choque de
+   especificidad que ya se había pagado en `.actions`: `.composer-foot button`
+   (0,1,1) le gana a `.ghost` (0,1,0). Conserva la altura del primario para que
+   la fila lea como una fila y baja por peso y color, que es como se dice
+   "secundario" acá — y lo que la regla del cierre ya pedía por escrito. */
+.composer-foot button.ghost {
+  color: var(--ink-2);
+  background: transparent;
+  border-color: var(--rule);
+  border-radius: var(--r-rough-alt);
+  font-weight: 500;
+}
+.composer-foot button.ghost:hover:not(:disabled) {
+  filter: none;
+  color: var(--ink);
+  background: var(--paper-inset);
+}
 .composer-foot .foot-msg { flex: none; margin: 0; }
 
 /* ── El cierre ───────────────────────────────────────────────────────── */
+/* Titulaba texto de 15 px con 13 px en gris: un rótulo más chico y más apagado
+   que su contenido invierte la jerarquía y se lee como un pie de foto. Sube a
+   tinta y al tamaño del cuerpo, y el aire de arriba hace el resto. */
 .block-title {
-  margin: var(--s6) 0 var(--s2);
-  font-size: 13px;
+  margin: var(--s7) 0 var(--s3);
+  font-size: 15px;
   font-weight: 600;
-  color: var(--ink-2);
+  color: var(--ink);
 }
 .area {
   padding: var(--s4) 0;
@@ -1668,6 +1943,12 @@ h2 .rail-chip { margin-left: var(--s2); }
   font-size: 13px;
   color: var(--ink-3);
 }
+/* El riel de siempre, contando sesiones hacia la tarjeta. Sin él la pantalla
+   eran siete bloques de idéntica textura y el 2/3 de la derecha era lo único
+   que los separaba: la cifra decía cuánto falta y nada lo mostraba. Un patrón
+   que ya llevaste a Agregar y no volvió queda en papel sin marcar, igual que
+   un nivel que no empezaste. */
+.pattern-meter { margin-top: var(--s3); max-width: 20rem; }
 .pattern-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1698,6 +1979,7 @@ h2 .rail-chip { margin-left: var(--s2); }
   display: grid;
   gap: var(--s1);
   padding: var(--s2) 0;
+  border-bottom: 0;
   font-family: var(--mono);
   font-size: 13px;
   overflow-wrap: anywhere;
@@ -1711,5 +1993,5 @@ h2 .rail-chip { margin-left: var(--s2); }
 .rows li a.ghost { flex: none; text-decoration: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  * { transition: none !important; }
+  * { transition: none !important; animation: none !important; }
 }

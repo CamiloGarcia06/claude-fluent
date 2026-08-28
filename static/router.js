@@ -34,6 +34,11 @@ const ROUTES = {
 
 const DEFAULT_ROUTE = "hoy";
 
+// A los 250 ms, no antes: /api/settings y /api/practice/patterns contestan en
+// dos milisegundos, y un aviso que parpadea es peor que ninguno. Las que sí se
+// hacen esperar son las que leen Anki — medidas entre 1 y 2 s.
+const LOADING_AFTER_MS = 250;
+
 function parse() {
   const parts = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
   return { name: parts[0] || DEFAULT_ROUTE, params: parts.slice(1) };
@@ -82,6 +87,8 @@ async function navigate() {
   root.replaceChildren();
   window.scrollTo(0, 0);
 
+  const waiting = setTimeout(() => { $("loading").hidden = false; }, LOADING_AFTER_MS);
+
   try {
     await view.render(root, params);
   } catch (error) {
@@ -90,6 +97,9 @@ async function navigate() {
     // below it is honest: there is nothing to show, not a stale copy.
     root.replaceChildren();
     showOffline(error.message);
+  } finally {
+    clearTimeout(waiting);
+    $("loading").hidden = true;
   }
 
   fillChips();

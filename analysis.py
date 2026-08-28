@@ -39,12 +39,41 @@ TODAY_STUCK_LIMIT = 12
 MIN_ATTEMPTS = 3
 MIN_FAILURES = 1
 
-# Weights for the struggling ranking. Failures dominate, time spent breaks
-# ties, and a dropped interval is the scheduler's own vote that the card was
-# forgotten.
+# Dos preguntas distintas sobre las mismas tarjetas, y por eso dos ordenamientos.
+#
+#   ¿Qué me está costando tiempo?   → `struggling`, que es lo que pinta Atascos
+#                                      bajo el titular "te están costando 83 min".
+#   ¿Qué vengo fallando?            → `failing_now`, que es lo que pinta Hoy
+#                                      bajo el titular "Vengo fallando".
+#
+# Eran el mismo ranking, y el que se llamaba "vengo fallando" estaba ordenado
+# por tiempo: medido contra la colección real, **el 87 % del puntaje era tiempo
+# y sólo el 9 % eran fallos**. La consecuencia se veía en pantalla: una tarjeta
+# fallada 2 de 11 veces encabezaba la lista y otra fallada 9 de 11 quedaba
+# duodécima, porque la primera es lenta y se repasó más veces. `seconds_lost`
+# es una suma sobre todos los repasos, así que crece con la cantidad de
+# repasos; la tasa de fallo, en cambio, tiene techo en 1.
 W_FAILURE_RATE = 60.0
-W_SECONDS_LOST = 1.0
+W_SECONDS_LOST = 1.0     # segundos **totales**: el costo, para Atascos
 W_INTERVAL_DROP = 8.0
+
+# Para "vengo fallando": los fallos mandan y el tiempo sólo desempata. Es el
+# segundo **medio** por repaso y no el total, justamente para que ver una
+# tarjeta muchas veces no la suba sola.
+W_FAILURES = 6.0         # cuántas veces, no sólo en qué proporción
+W_SECONDS_EACH = 0.5     # lo lenta que es cada vez, como desempate
+
+# Y sólo lo que estás repasando ahora. Una tarjeta que no ves hace dos semanas
+# no es algo que "vengas fallando": es de un mazo que dejaste. Medido: cinco de
+# las doce que mostraba Hoy no se tocaban hacía quince días.
+RECENT_DAYS = 7
+
+# El aprendizaje inicial no cuenta como fallo. Un "Otra vez" mientras aprendés
+# una tarjeta nueva es el método funcionando, no una tarjeta atascada — y se
+# nota en los números: 7 % de fallos en los repasos de tipo aprendizaje contra
+# 45 % en los de reaprendizaje, que son los que sí dicen que algo se te
+# olvidó. (Tipos del revlog: 0 aprendiendo · 1 repaso · 2 reaprendiendo.)
+LEARNING_TYPE = 0
 
 
 def _day(timestamp_ms: int) -> date:
@@ -191,23 +220,24 @@ def due_by_deck(deck_counts: list[dict]) -> dict:
     }
 
 
-def struggling(reviews: list[Review], limit: int | None = 12) -> list[dict]:
-    """Cards ranked by how much trouble they cause.
+def card_stats(reviews: list[Review]) -> list[dict]:
+    """Una fila por tarjeta, con los dos puntajes y sin ordenar.
 
-    Three signals combine, because none of them is enough alone: a card can be
-    failed often, be slow every time without being failed, or keep having its
-    interval pulled back by the scheduler.
+    Las dos preguntas —qué te cuesta tiempo y qué venís fallando— se responden
+    con los mismos números y se diferencian sólo en cómo se ordenan, así que se
+    cuentan una vez sola. Contarlas dos veces es cómo las dos listas se van
+    separando en cosas que no deberían.
 
-    A card must clear both gates first: seen at least MIN_ATTEMPTS times, and
-    failed at least MIN_FAILURES of them. Without the failure gate the ranking
-    is really a slowest-cards list, and a card you have never once got wrong is
-    not a card you are stuck on.
+    Las dos puertas valen para las dos: vista al menos MIN_ATTEMPTS veces y
+    fallada al menos MIN_FAILURES. Sin la puerta de los fallos, cualquier
+    ranking sobre tiempo es una lista de tarjetas lentas, y una tarjeta que
+    nunca fallaste no es una en la que estés trabado.
     """
     by_card: dict[int, list[Review]] = defaultdict(list)
     for r in reviews:
         by_card[r.card_id].append(r)
 
-    ranked = []
+    rows_out = []
     for card_id, rows in by_card.items():
         attempts = len(rows)
         failures = sum(1 for r in rows if r.failed)
@@ -217,15 +247,11 @@ def struggling(reviews: list[Review], limit: int | None = 12) -> list[dict]:
         drops = sum(1 for r in rows if r.interval_dropped)
         durations = [r.duration_ms for r in rows]
         seconds_lost = sum(durations) / 1000.0
+        seconds_each = statistics.mean(durations) / 1000.0
 
         failure_rate = failures / attempts
-        score = (
-            W_FAILURE_RATE * failure_rate
-            + W_SECONDS_LOST * seconds_lost
-            + W_INTERVAL_DROP * drops
-        )
 
-        ranked.append({
+        rows_out.append({
             "card_id": card_id,
             "deck": rows[-1].deck,
             "attempts": attempts,
@@ -238,14 +264,67 @@ def struggling(reviews: list[Review], limit: int | None = 12) -> list[dict]:
                 rows[-1].timestamp_ms / 1000
             ).isoformat(timespec="seconds"),
             "last_interval_s": interval_to_seconds(rows[-1].new_interval),
-            "score": round(score, 1),
+            # Lo que te cuesta: los segundos totales mandan, porque la pregunta
+            # es cuántos minutos te comen.
+            "score": round(
+                W_FAILURE_RATE * failure_rate
+                + W_SECONDS_LOST * seconds_lost
+                + W_INTERVAL_DROP * drops, 1),
+            # Lo que venís fallando: manda la proporción, la cantidad de fallos
+            # la respalda, y el segundo medio sólo desempata. La caída de
+            # intervalo dice casi lo mismo que un fallo —el programador la
+            # aplica cuando fallás— y por eso refuerza en vez de aportar.
+            "failing_score": round(
+                W_FAILURE_RATE * failure_rate
+                + W_FAILURES * failures
+                + W_SECONDS_EACH * seconds_each
+                + W_INTERVAL_DROP * drops, 1),
         })
 
-    ranked.sort(key=lambda c: -c["score"])
+    return rows_out
+
+
+def struggling(reviews: list[Review], limit: int | None = 12) -> list[dict]:
+    """Las tarjetas que más tiempo te cuestan. Es lo que ordena Atascos.
+
+    Tres señales se combinan porque ninguna alcanza sola: una tarjeta puede
+    fallarse seguido, ser lenta siempre sin fallarse, o que el programador le
+    siga recortando el intervalo.
+    """
+    ranked = sorted(card_stats(reviews), key=lambda c: -c["score"])
     # `limit=None` returns the whole ranking, which is what the counters on the
     # dashboard need: with the list cut to twelve, "7 atascos" and "12 atascos"
     # would be the same screen.
     return ranked[:limit]
+
+
+def failing_now(reviews: list[Review], today: date,
+                limit: int | None = TODAY_STUCK_LIMIT,
+                recent_days: int = RECENT_DAYS) -> list[dict]:
+    """Lo que venís fallando **de lo que estás repasando**. Es lo de Hoy.
+
+    Dos diferencias con `struggling`, y las dos salieron de mirar la lista real:
+
+    Se ordena por fallos y no por tiempo. Con el puntaje del costo, el 87 % lo
+    ponía el tiempo: una tarjeta fallada 2 de 11 veces encabezaba la lista y
+    otra fallada 9 de 11 quedaba duodécima. El titular del panel dice "vengo
+    fallando" desde el primer día; la lista recién ahora dice lo mismo.
+
+    Y sólo entra lo repasado en los últimos `recent_days`. Una tarjeta que no
+    ves hace quince días no es algo que vengas fallando: es un mazo que
+    dejaste, y llenaba media pantalla de temas que no estás estudiando.
+
+    El aprendizaje inicial no cuenta: un "Otra vez" mientras aprendés una
+    tarjeta nueva es el método funcionando. Los repasos y los reaprendizajes sí
+    — ahí un fallo quiere decir que algo que sabías se te olvidó.
+    """
+    seen = [r for r in reviews if r.review_type != LEARNING_TYPE]
+    cutoff = today - timedelta(days=recent_days)
+
+    fresh = [c for c in card_stats(seen)
+             if datetime.fromisoformat(c["last_seen"]).date() >= cutoff]
+    fresh.sort(key=lambda c: -c["failing_score"])
+    return fresh[:limit]
 
 
 def summary(reviews: list[Review], deck_counts: list[dict], today: date) -> dict:
@@ -256,9 +335,8 @@ def summary(reviews: list[Review], deck_counts: list[dict], today: date) -> dict
     """
     reviews = english_only(reviews)
     total_seconds = sum(r.duration_ms for r in reviews) / 1000.0
-    # Ranked once and read twice: Hoy paints the head of the list, the Dashboard
-    # counts it. With the list cut to twelve, "7 atascos" and "40 atascos" would
-    # be the same figure.
+    # El ranking del costo, entero, para que el Dashboard pueda contarlo: con
+    # la lista cortada en doce, "7 atascos" y "40 atascos" serían la misma cifra.
     stuck = struggling(reviews, limit=None)
     return {
         "date": today.isoformat(),
@@ -266,7 +344,12 @@ def summary(reviews: list[Review], deck_counts: list[dict], today: date) -> dict
         "streak": streak(reviews, today),
         "due": due_by_deck(deck_counts),
         "calendar": calendar(reviews, today),
-        "struggling": stuck[:TODAY_STUCK_LIMIT],
+        # Dos listas y no una: Hoy pinta lo que venís fallando de lo que estás
+        # repasando, y el Dashboard cuenta cuántas tarjetas te cuestan tiempo.
+        # Son dos preguntas y hasta ahora las dos se contestaban con el
+        # ranking del costo.
+        "failing": failing_now(reviews, today, limit=TODAY_STUCK_LIMIT),
+        "failing_window": {"days": RECENT_DAYS},
         "struggling_total": len(stuck),
         "window": {
             "days": CALENDAR_DAYS,

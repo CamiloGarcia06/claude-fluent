@@ -39,7 +39,7 @@ const MARKUP = `
       <p class="sub-note" id="goal-msg">El atraso no la mueve: la meta es lo que
         entra en tu rato de hoy, no lo que se acumuló.</p>
 
-      <div class="panel-head" style="margin-top: var(--s6)">
+      <div class="panel-head dials-head">
         <h2>Dials</h2>
         <span class="sub">de lectura</span>
       </div>
@@ -56,6 +56,33 @@ function statusRow(name, ok, okText, failText) {
   state.dataset.ok = String(ok);
   li.append(state);
   return li;
+}
+
+/** Una fila que informa y no diagnostica: sin `data-ok`, así que no toma
+ *  color en ninguna de las dos direcciones. */
+function noteRow(name, text) {
+  const li = el("li");
+  li.append(el("span", "name", name), el("span", "count", text));
+  return li;
+}
+
+/** Los temarios que el app no puede leer.
+ *
+ *  Un archivo roto se descubría recién cuando ya te lo habían regenerado: tu
+ *  edición "no toma", la pantalla se ve normal, y no hay dónde enterarse. Eso
+ *  es exactamente lo que este panel existe para contar. **Rojo sí**: un
+ *  archivo que el app no puede leer es una falla del sistema, no un estado
+ *  tuyo — y ninguno todavía no es una falla, es una ausencia. */
+function syllabusRow(info) {
+  const total = info?.total ?? 0;
+  const bad = info?.unreadable ?? [];
+
+  if (!total && !bad.length) {
+    return noteRow("Temarios congelados", "todavía ninguno");
+  }
+  return statusRow("Temarios congelados", bad.length === 0,
+                   plural(total, "legible", "legibles"),
+                   `${bad.join(", ")} no se ${bad.length === 1 ? "puede" : "pueden"} leer`);
 }
 
 async function saveGoal() {
@@ -93,8 +120,12 @@ export async function render(root) {
   list.append(
     statusRow("Anki y AnkiConnect", health.anki, "respondiendo", "sin respuesta"),
     statusRow("claude en el PATH", health.claude, "disponible", "no encontrado"),
-    statusRow("Último sync", Boolean(health.last_sync),
-              health.last_sync || "", "todavía sin registrar"),
+    // No haberse registrado nunca no es un fallo del sistema: es una ausencia,
+    // y acá el rojo está reservado para lo que falló de verdad. Salía en
+    // --alarm al lado de dos conexiones sanas, que es exactamente la falsa
+    // alarma que esta pantalla existe para no dar.
+    noteRow("Último sync", health.last_sync || "todavía sin registrar"),
+    syllabusRow(health.syllabus),
   );
 
   const dials = $("dials");

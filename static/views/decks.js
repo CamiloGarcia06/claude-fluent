@@ -56,7 +56,10 @@ function flatten(data) {
 }
 
 function deckRow(deck) {
-  const li = el("li");
+  // Tres columnas, no una fila flex: con flex la etiqueta empezaba donde
+  // terminaba el nombre y las cifras donde terminaba la etiqueta, así que
+  // ninguna de las dos se alineaba entre filas.
+  const li = el("li", "deck-row");
 
   const name = deck.href ? el("a", "name", deck.deck) : el("span", "name", deck.deck);
   if (deck.href) name.href = deck.href;

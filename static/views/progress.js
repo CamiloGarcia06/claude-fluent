@@ -7,6 +7,7 @@
 
 import {
   $, el, plural, percent, getJSON, catalog,
+  loadMotion, staggerStep, DURATION_MS,
 } from "/ui.js";
 
 export const slug = (skill) => skill.toLowerCase();
@@ -132,24 +133,70 @@ function renderRails(data) {
     `maduras al ${percent(data.maturity_threshold)} sostienen un nivel`;
 }
 
+// Una fila por habilidad, no una por nivel. Con una por nivel eran veinte
+// filas idénticas que decían "sin mazos" veinte veces —la misma palabra en la
+// columna donde tendría que ir la información— y el panel más alto de la
+// pantalla estaba dedicado a lo que menos dice. Agrupado son cinco filas, y
+// cada nivel que falta es la puerta a generarlo, que es lo que la cabecera
+// viene prometiendo.
 function renderGaps(data) {
   const list = $("gaps");
   list.replaceChildren();
 
-  const holes = data.skills.flatMap((skill) =>
-    skill.gaps.map((level) => ({ skill: skill.skill, level })));
+  const holes = data.skills.filter((skill) => skill.gaps.length);
 
   // No holes is good news, not an empty list to stare at.
   $("gaps-panel").hidden = holes.length === 0;
   if (!holes.length) return;
 
   for (const hole of holes) {
-    const li = el("li");
-    const link = el("a", "name", `${hole.skill} ${hole.level}`);
+    const li = el("li", "gap-row");
+
+    const link = el("a", "name", hole.skill);
     link.href = `#/skill/${slug(hole.skill)}`;
-    li.append(link, el("span", "count", "sin mazos"));
+
+    const levels = el("span", "gap-levels");
+    for (const level of hole.gaps) {
+      const chip = el("a", "gap-level", level);
+      chip.href = `#/agregar/${slug(hole.skill)}/${level}`;
+      chip.title = `Generar las primeras tarjetas de ${hole.skill} ${level}`;
+      levels.append(chip);
+    }
+
+    li.append(link, levels);
     list.append(li);
   }
+}
+
+// El riel entra como los medidores del tablero: escala desde la izquierda,
+// escalonado, y todo termina a los 300 ms. Escala y no `width`, que reflowaría
+// las cinco filas en cada cuadro.
+function playEntrance() {
+  loadMotion().then((motion) => {
+    if (!motion) return;
+    const { animate, stagger } = motion;
+
+    const fills = document.querySelectorAll("#rails .seg-fill");
+    if (fills.length) {
+      animate(fills, {
+        scaleX: [0, 1],
+        duration: DURATION_MS,
+        delay: stagger(staggerStep(fills.length)),
+        ease: "outQuad",
+      });
+    }
+
+    const rows = document.querySelectorAll("#gaps li");
+    if (rows.length) {
+      animate(rows, {
+        opacity: [0, 1],
+        y: [6, 0],
+        duration: DURATION_MS,
+        delay: stagger(staggerStep(rows.length)),
+        ease: "outQuad",
+      });
+    }
+  });
 }
 
 function showHint(text) {
@@ -176,6 +223,7 @@ export async function render(root) {
   renderNext(data.next_up);
   renderRails(data);
   renderGaps(data);
+  playEntrance();
 
   // The deck named in the headline is the deck Anki opens, so the button does
   // what the sentence above it just promised.

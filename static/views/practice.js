@@ -11,7 +11,10 @@
 // proceso igual. Acá sólo se espeja lo que el servidor devolvió, como `add.js`
 // espeja sus candidatas.
 
-import { $, el, getJSON, side, ApiError, plural } from "/ui.js";
+import {
+  $, el, getJSON, side, ApiError, plural, waiting, working,
+  loadMotion, staggerStep, DURATION_MS,
+} from "/ui.js";
 
 // Medido contra la colección real: los turnos caen entre 13 y 21 s, y el
 // cierre entre 30 y 35. La barra no llega nunca al 100 % esperando.
@@ -42,13 +45,13 @@ const MARKUP = `
     <section class="hero">
       <p class="date" id="practice-kicker">Práctica de escritura</p>
       <h1 id="practice-title">Escribí en inglés y te corrijo</h1>
-      <p class="sub" id="practice-sub"></p>
+      <p class="hero-note" id="practice-sub"></p>
       <p class="hint" id="practice-hint" hidden></p>
     </section>
 
     <section class="panel" id="setup">
       <div class="panel-head"><h2>¿De qué querés hablar?</h2></div>
-      <p class="panel-meta">Elegí un tema y escribimos sobre eso. Te contesto en
+      <p class="panel-note">Elegí un tema y escribimos sobre eso. Te contesto en
         inglés y te corrijo sólo lo que estorba el mensaje.</p>
       <textarea id="topic" class="termbox" rows="2" spellcheck="false"
         placeholder="anime, mi trabajo con Odoo, el fin de semana…"></textarea>
@@ -66,13 +69,16 @@ const MARKUP = `
       <div class="panel-head">
         <h2 id="thread-topic"></h2>
       </div>
-      <p class="panel-meta" id="thread-meta"></p>
+      <p class="sub-note" id="thread-meta"></p>
       <div id="thread"></div>
 
       <div class="composer" id="composer">
         <textarea id="message" class="termbox" rows="3" spellcheck="false"
           placeholder="Escribí tu respuesta en inglés…"></textarea>
-        <span class="gen-track"><span class="gen-bar" id="turn-bar"></span></span>
+        <!-- La pista de espera se inserta acá y se va cuando llega la
+             respuesta. Vivía en el markup, siempre presente: un surco de 8 px
+             bajo la caja que no significaba nada mientras no pasaba nada. -->
+        <div id="turn-wait"></div>
         <div class="composer-foot">
           <span class="composer-tip">Enter envía · Shift+Enter salta de línea</span>
           <span class="foot-msg" id="send-msg" hidden></span>
@@ -86,6 +92,7 @@ const MARKUP = `
     <section class="panel" id="close-panel" hidden>
       <div class="panel-head"><h2>Cómo te fue</h2></div>
       <p class="diagnosis" id="close-summary"></p>
+      <h3 class="block-title" id="strengths-title" hidden>Lo que te salió bien</h3>
       <ul class="rows" id="close-strengths"></ul>
       <div id="close-areas"></div>
       <div id="close-turns"></div>
@@ -128,37 +135,66 @@ function message(id, text, ok = true) {
   node.hidden = !text;
 }
 
-function setBusy(value) {
+function setBusy(value, fired) {
   busy = value;
   $("send").disabled = value;
   $("finish").disabled = value;
   $("start").disabled = value;
+  // Y el que apretaste lo dice: conserva su tinta en vez de irse al gris de
+  // "no está disponible". Los otros dos sí quedan deshabilitados de verdad.
+  // Se limpian los tres antes, o el atributo queda pegado al que disparó la
+  // llamada anterior y vuelve a pintarse la próxima vez que se deshabilite.
+  for (const id of ["send", "finish", "start"]) $(id).dataset.working = "false";
+  working(fired, value);
   // El textarea NO se deshabilita: bloquear un campo de texto veinte segundos
   // se siente roto, y seguir escribiendo es la única forma de recuperar la
   // espera.
 }
 
-/** La barra honesta de add.js: llega al 90 % y espera ahí. Una que se planta
- *  en 100 % y sigue esperando es peor que ninguna. */
-function runBar(estimate) {
-  const bar = $("turn-bar");
-  bar.style.transition = "none";
-  bar.style.transform = "scaleX(0)";
-  requestAnimationFrame(() => {
-    bar.style.transition = `transform ${estimate}ms linear`;
-    bar.style.transform = "scaleX(0.9)";
+/** La espera del turno y la del cierre, que nunca se pisan: las dos llamadas
+ *  se excluyen por `busy`. */
+let stopBar = null;
+
+const startBar = (estimate) => { stopBar = waiting($("turn-wait"), estimate); };
+const endBar = (done) => { stopBar?.(done); stopBar = null; };
+
+/** El bloque recién llegado entra; el resto del hilo no se toca.
+ *
+ *  Son diecisiete segundos de espera y después el bloque aparece de golpe a
+ *  media pantalla: la entrada es lo que dice "esto es lo nuevo". Es la única
+ *  animación de esta pantalla y ocurre una vez cada veinte segundos — nada que
+ *  cruces cien veces, que es lo que el sistema deja sin animar. */
+function enterLastTurn() {
+  loadMotion().then((motion) => {
+    const block = $("thread")?.lastElementChild;
+    if (!motion || !block) return;
+    motion.animate(block, {
+      opacity: [0, 1],
+      y: [8, 0],
+      duration: DURATION_MS,
+      ease: "outQuad",
+    });
   });
 }
 
-function endBar(done) {
-  const bar = $("turn-bar");
-  if (done) {
-    bar.style.transition = "transform 200ms ease-out";
-    bar.style.transform = "scaleX(1)";
-  } else {
-    bar.style.transition = "none";
-    bar.style.transform = "scaleX(0)";
-  }
+/** El análisis llega después de medio minuto y es media pantalla de texto. La
+ *  cascada corta la aparición de golpe y ordena por dónde empezar a leer; como
+ *  en Hoy, todo termina dentro del mismo presupuesto. */
+function enterClose() {
+  loadMotion().then((motion) => {
+    if (!motion) return;
+    const blocks = document.querySelectorAll(
+      "#close-strengths li, #close-areas .block-title, #close-areas .area, "
+      + "#close-areas .rows li, #close-turns .block-title, #close-turns .field");
+    if (!blocks.length) return;
+    motion.animate(blocks, {
+      opacity: [0, 1],
+      y: [6, 0],
+      duration: DURATION_MS,
+      delay: motion.stagger(staggerStep(blocks.length)),
+      ease: "outQuad",
+    });
+  });
 }
 
 // ── La conversación ───────────────────────────────────────────────────
@@ -317,7 +353,7 @@ async function start() {
     return;
   }
   const mine = claim();
-  setBusy(true);
+  setBusy(true, $("start"));
   message("setup-msg", "");
 
   try {
@@ -354,9 +390,9 @@ async function send(text, replaceIndex) {
   if (!value || busy) return;
 
   const mine = claim();
-  setBusy(true);
+  setBusy(true, $("send"));
   message("send-msg", "");
-  runBar(TURN_ESTIMATE_MS);
+  startBar(TURN_ESTIMATE_MS);
 
   // El mensaje se vacía ya: el servidor lo persiste antes de llamar al modelo,
   // así que dejarlo en la caja invitaría a mandarlo dos veces.
@@ -374,6 +410,7 @@ async function send(text, replaceIndex) {
     if (!mine()) return;
     endBar(true);
     await refresh();
+    enterLastTurn();
   } catch (error) {
     if (!mine()) return;
     endBar(false);
@@ -412,9 +449,9 @@ async function finish() {
   }
 
   const mine = claim();
-  setBusy(true);
+  setBusy(true, $("finish"));
   message("send-msg", "Leyendo toda la sesión… cerca de medio minuto.");
-  runBar(CLOSE_ESTIMATE_MS);
+  startBar(CLOSE_ESTIMATE_MS);
 
   try {
     const data = await getJSON("/api/practice/close", {
@@ -535,8 +572,12 @@ function paintClose(data) {
 
   $("close-summary").textContent = analysis.summary;
 
+  // Tres frases sueltas colgando del resumen, sin nada que dijera qué eran:
+  // las otras dos mitades del cierre sí llevan título, y esta se leía como una
+  // continuación del párrafo de arriba.
   const strengths = $("close-strengths");
   strengths.replaceChildren();
+  $("strengths-title").hidden = analysis.strengths.length === 0;
   for (const item of analysis.strengths) {
     strengths.append(el("li", null, item));
   }
@@ -573,6 +614,9 @@ function paintClose(data) {
     }
     turns.append(diff);
   }
+
+  // Al final, con las tres mitades ya en el DOM: la cascada las ordena.
+  enterClose();
 }
 
 // ── Arranque ──────────────────────────────────────────────────────────
@@ -672,6 +716,7 @@ export async function render(root, params) {
       last = data.last;
       const button = $("see-last");
       button.textContent = `Ver el análisis de «${last.topic}»`;
+      button.title = `Releer el análisis de la sesión sobre «${last.topic}». No cuenta nada: el conteo ocurrió al cerrarla.`;
       button.hidden = false;
       button.addEventListener("click", showLast);
     }

@@ -61,7 +61,8 @@ const MARKUP = `
       <section class="panel" id="struggling-panel" hidden>
         <div class="panel-head">
           <h2>Vengo fallando</h2>
-          <a id="struggling-all" href="#/atascos" hidden></a>
+          <span class="sub" id="struggling-window"></span>
+          <a id="struggling-all" href="#/atascos" hidden>ver todas</a>
         </div>
         <ul id="struggling" class="rows"></ul>
       </section>
@@ -194,7 +195,12 @@ function renderDecks(decks) {
   }
 }
 
-function renderStruggling(cards) {
+// Lo que venís fallando de lo que estás repasando ahora, ordenado por fallos.
+// Estaba ordenado por tiempo perdido bajo un titular que dice "vengo fallando",
+// así que encabezaba la lista una tarjeta fallada 2 de 11 veces mientras una de
+// 9 de 11 quedaba abajo — y media lista era de mazos que no tocabas hace
+// quince días. El titular no cambió; la lista ahora dice lo mismo que él.
+function renderStruggling(cards, windowDays) {
   const list = $("struggling");
   list.replaceChildren();
 
@@ -203,13 +209,25 @@ function renderStruggling(cards) {
   $("struggling-panel").hidden = cards.length === 0;
   if (!cards.length) return;
 
-  const link = $("struggling-all");
-  link.hidden = false;
-  link.textContent = `ver las ${cards.length}`;
+  $("struggling-window").textContent = `de lo que repasaste en ${windowDays} días`;
+  $("struggling-all").hidden = false;
 
   for (const card of cards) {
     const name = card.front || `carta ${card.card_id}`;
-    const li = row(name, `${card.failures} fallos de ${card.attempts}`);
+    const li = el("li", "stuck-row");
+
+    // El tema, debajo del frente. La queja que trajo este cambio era "me
+    // muestra tarjetas de temas que no estoy estudiando", y sin el mazo a la
+    // vista no hay forma de comprobarlo desde la pantalla.
+    const left = el("span", "name");
+    left.append(el("span", "stuck-front", name),
+                el("span", "tag", card.deck.split("::").pop()));
+
+    // "1 fallos de 7" — el plural estaba escrito a mano en la única fila donde
+    // el uno es frecuente, justo la tarjeta que recién empezás a fallar.
+    li.append(left, el("span", "count",
+      `${plural(card.failures, "fallo", "fallos")} de ${card.attempts}`));
+
     const control = repair.button(card, name);
     if (control) li.append(control);
     list.append(li);
@@ -297,7 +315,7 @@ async function load({ withMotion = true } = {}) {
   renderPicker(data);
   renderCalendar(data.calendar);
   renderDecks(data.due.decks);
-  renderStruggling(data.struggling);
+  renderStruggling(data.failing, data.failing_window.days);
 
   // Only on the initial load of Today, and never awaited: the screen is
   // already usable, the motion just catches up.

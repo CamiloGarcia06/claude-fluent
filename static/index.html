@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>claude-fluent</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -44,6 +45,10 @@
 
   <div class="content">
     <p id="offline" class="offline" hidden></p>
+    <!-- Leer la colección cuesta uno o dos segundos y hasta ahora eso era una
+         pantalla en blanco. Vive fuera de #view porque la vista se repinta
+         entera al montar: adentro, el primer innerHTML se lo llevaría. -->
+    <p id="loading" class="loading" hidden>Leyendo la colección…</p>
     <main id="view"></main>
   </div>
 

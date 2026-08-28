@@ -417,15 +417,25 @@ def mark(stored: dict, key: str, action: str, stamp: str) -> dict:
     """
     if key not in coach.PATTERN_BY_KEY:
         raise ValueError("ese patrón no está en el catálogo")
-    if action not in ("carded", "reset"):
-        raise ValueError("la acción tiene que ser carded o reset")
+    if action not in ("carded", "reset", "uncard"):
+        raise ValueError("la acción tiene que ser carded, reset o uncard")
     patterns = {k: dict(v) for k, v in stored.get("patterns", {}).items()}
     entry = patterns.get(key)
     if entry is None:
         raise ValueError("ese patrón todavía no te apareció")
-    entry["cleared"] = stamp
-    if action == "carded":
-        entry["carded"] = stamp
+    if action == "uncard":
+        # Deshacer el clic. "Hacer tarjeta" se marca al apretar el enlace —este
+        # lado no sabe si después la escribiste— y hasta acá eso era de ida:
+        # bastaba un clic para que un patrón que sí necesitaba tarjeta dejara
+        # de reclamarla, sin manera de traerlo de vuelta. Es gratis porque
+        # limpiar nunca borró historia: mover la raya al principio devuelve el
+        # conteo entero, que sigue derivándose de `sessions`.
+        entry["cleared"] = None
+        entry["carded"] = None
+    else:
+        entry["cleared"] = stamp
+        if action == "carded":
+            entry["carded"] = stamp
     return {"patterns": patterns, "unmatched": dict(stored.get("unmatched", {}))}
 
 

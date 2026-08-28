@@ -62,6 +62,57 @@ export async function loadMotion() {
   }
 }
 
+// ── La espera ─────────────────────────────────────────────────────────
+// Siete llamadas al modelo en el app y cada una contaba la espera a su manera:
+// dos con barra, tres con una frase quieta, y el botón que la disparó siempre
+// gris al 45 % — que es como se dibuja "no podés", no "estoy pensando". Esto
+// es la barra honesta que ya vivía en Agregar y en el compositor, sacada a una
+// pieza sola para que las siete digan lo mismo.
+//
+// Dos reglas, y las dos ya estaban escritas en otro lado del proyecto: **la
+// barra ocupa el lugar donde va a aparecer la respuesta**, y **la frase va al
+// lado del botón que apretaste**.
+
+/** Arranca la espera dentro de `container` y devuelve cómo terminarla.
+ *
+ *  Corre hasta el 90 % en el tiempo medido y espera ahí: una barra que llega
+ *  al 100 % y sigue esperando es peor que ninguna. `stop(true)` la completa y
+ *  la saca; `stop(false)` la saca sin más, que es lo que corresponde cuando lo
+ *  que llegó fue un error. */
+export function waiting(container, estimate, before) {
+  const track = el("span", "gen-track wait");
+  const bar = el("span", "gen-bar");
+  track.append(bar);
+  // `before` para cuando la respuesta llena una región que ya tiene algo
+  // arriba: en el temario los puntos están pintados y lo que falta es la
+  // cobertura, así que la barra va bajo la frase que la anuncia y no al pie de
+  // dieciocho filas, donde nadie la está mirando.
+  container.insertBefore(track, before ?? null);
+
+  // En el mismo cuadro no hay transición que animar: el navegador ve un solo
+  // valor. El salto de cuadro es lo que la convierte en un recorrido.
+  requestAnimationFrame(() => {
+    bar.style.transition = `transform ${estimate}ms linear`;
+    bar.style.transform = "scaleX(0.9)";
+  });
+
+  return (done = true) => {
+    if (!done) { track.remove(); return; }
+    bar.style.transition = "transform 160ms cubic-bezier(.23,1,.32,1)";
+    bar.style.transform = "scaleX(1)";
+    setTimeout(() => track.remove(), 170);
+  };
+}
+
+/** El botón que disparó la llamada. Sigue sin poder apretarse, pero lo dice de
+ *  otra manera: conserva su tinta en vez de irse al 45 %, que es el gris de
+ *  "esto no está disponible". */
+export function working(button, on) {
+  if (!button) return;
+  button.disabled = on;
+  button.dataset.working = String(on);
+}
+
 // ── Formatting ────────────────────────────────────────────────────────
 
 // Build the date from its parts. `new Date("2026-08-18")` parses as UTC

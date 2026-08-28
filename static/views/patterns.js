@@ -9,14 +9,17 @@
 // párrafo es un hábito, no tres errores. Y sin color, por lo mismo que Atascos
 // — el orden ya dice cuál duele más, y estos son el trabajo, no un veredicto.
 
-import { $, el, emptyRow, plural, getJSON, formatLongDate, ApiError } from "/ui.js";
+import {
+  $, el, emptyRow, plural, getJSON, formatLongDate, ApiError,
+  loadMotion, staggerStep, DURATION_MS,
+} from "/ui.js";
 
 const MARKUP = `
 <div id="patterns">
   <section class="hero">
     <p id="date" class="date">Patrones</p>
     <h1 id="patterns-headline"></h1>
-    <p class="sub" id="patterns-sub"></p>
+    <p class="hero-note" id="patterns-sub"></p>
     <div class="actions">
       <a class="primary" href="#/practica/writing">Practicar escritura</a>
     </div>
@@ -32,7 +35,7 @@ const MARKUP = `
 
   <section class="panel" id="gaps-panel" hidden>
     <div class="panel-head"><h2>Sin nombre todavía</h2></div>
-    <p class="panel-meta">Estos hábitos aparecieron en tus análisis y el
+    <p class="panel-note">Estos hábitos aparecieron en tus análisis y el
       catálogo no supo nombrarlos, así que no cuentan para tarjeta. Es la lista
       de lo que le falta al catálogo, y de acá salen las entradas nuevas.</p>
     <ul id="gap-rows" class="rows"></ul>
@@ -76,6 +79,24 @@ function examples(row) {
   return list;
 }
 
+/** El riel de siempre, ahora contando sesiones hacia la tarjeta.
+ *
+ *  La cifra de la derecha dice cuánto falta y hasta ahora nada lo mostraba:
+ *  siete bloques de idéntica textura y un "2/3" como única diferencia entre
+ *  ellos. Un patrón que ya llevaste a Agregar y que no volvió queda en papel
+ *  sin marcar — el mismo trato que un nivel que no empezaste, por el mismo
+ *  motivo. */
+function meter(row) {
+  const share = threshold ? Math.min(1, row.count / threshold) : 0;
+  const track = el("span", "meter pattern-meter");
+  track.dataset.empty = String(share === 0);
+
+  const fill = el("span", "meter-fill");
+  fill.style.width = `${Math.round(share * 100)}%`;
+  track.append(fill);
+  return track;
+}
+
 function patternRow(row) {
   const li = el("li", "pattern");
   li.dataset.ready = String(row.ready);
@@ -101,12 +122,34 @@ function patternRow(row) {
     meta.append(el("span", null,
       ` · última vez ${formatLongDate(row.last_seen).toLowerCase()}`));
   }
-  li.append(meta);
+  li.append(meta, meter(row));
 
   if (row.examples.length) li.append(examples(row));
 
+  const actions = el("div", "pattern-actions");
+
+  // Deshacer el clic. "Hacer tarjeta" se marca al apretar el enlace —este lado
+  // no sabe si después la escribiste— y eso era de ida: un clic, aunque no
+  // hubieras escrito nada, y el patrón dejaba de reclamarte la tarjeta para
+  // siempre. Quedaban temas que necesitaban tarjeta sin forma de volver a
+  // pedirla. Es gratis porque limpiar nunca borró historia: mover la raya al
+  // principio devuelve el conteo entero.
+  if (!row.ready && row.carded) {
+    const undo = el("button", "ghost", "Todavía no la hice");
+    undo.type = "button";
+    undo.title = "Vuelve a contar las sesiones anteriores, y el patrón te reclama la tarjeta otra vez.";
+    undo.addEventListener("click", async () => {
+      undo.disabled = true;
+      try {
+        paint(await mark(row.key, "uncard"));
+      } catch {
+        undo.disabled = false;
+      }
+    });
+    actions.append(undo);
+  }
+
   if (row.ready) {
-    const actions = el("div", "pattern-actions");
     const path = [row.skill, row.level, row.seed].map(encodeURIComponent).join("/");
     const link = el("a", "ghost", `Hacer tarjeta en ${row.skill} ${row.level}`);
     link.href = `#/agregar/${path}`;
@@ -131,8 +174,9 @@ function patternRow(row) {
     });
 
     actions.append(link, drop);
-    li.append(actions);
   }
+
+  if (actions.children.length) li.append(actions);
   return li;
 }
 
@@ -184,10 +228,41 @@ function paint(data) {
   }
 }
 
+// El mismo vocabulario del tablero y de Progreso: escala desde la izquierda,
+// escalonado, y todo termina a los 300 ms.
+function playEntrance() {
+  loadMotion().then((motion) => {
+    if (!motion) return;
+    const { animate, stagger } = motion;
+
+    const fills = document.querySelectorAll("#patterns .meter-fill");
+    if (fills.length) {
+      animate(fills, {
+        scaleX: [0, 1],
+        duration: DURATION_MS,
+        delay: stagger(staggerStep(fills.length)),
+        ease: "outQuad",
+      });
+    }
+
+    const rows = document.querySelectorAll("#patterns .rows li");
+    if (rows.length) {
+      animate(rows, {
+        opacity: [0, 1],
+        y: [6, 0],
+        duration: DURATION_MS,
+        delay: stagger(staggerStep(rows.length)),
+        ease: "outQuad",
+      });
+    }
+  });
+}
+
 export async function render(root) {
   root.innerHTML = MARKUP;
   try {
     paint(await getJSON("/api/practice/patterns"));
+    playEntrance();
   } catch (error) {
     if (!(error instanceof ApiError)) throw error;
     // Contenido en la pantalla: este endpoint no toca Anki, así que un banner

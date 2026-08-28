@@ -85,10 +85,16 @@ def health() -> dict:
     """Checked first because every failure in this system is silent: Anki
     closed or claude without a session both leave the app looking normal
     while it lies to you."""
+    # Los temarios entran acá por la misma razón que Anki y `claude`: un
+    # archivo que el app no puede leer se descubría recién cuando ya te lo
+    # había regenerado —tu edición "no toma", la pantalla se ve normal, y no
+    # hay dónde enterarse—. Cuesta milisegundos y no toca Anki ni el modelo.
+    bad = syllabus_store.unreadable()
     return {
         "anki": anki.is_alive(),
         "claude": shutil.which("claude") is not None,
         "last_sync": state.read().get("last_sync"),
+        "syllabus": {"total": len(syllabus_store.levels_held()), "unreadable": bad},
     }
 
 
@@ -103,8 +109,8 @@ def today() -> dict:
     summary["goal"] = state.read()["daily_goal"]
 
     # analysis.py stays pure, so the card text is looked up here and merged in.
-    details = anki.card_summaries([c["card_id"] for c in summary["struggling"]])
-    for card in summary["struggling"]:
+    details = anki.card_summaries([c["card_id"] for c in summary["failing"]])
+    for card in summary["failing"]:
         found = details.get(card["card_id"], {})
         card["front"] = found.get("front", "")
         card["note_id"] = found.get("note_id")
@@ -223,6 +229,21 @@ def _decks_at(catalog: dict, focus: dict) -> list[str]:
     return []
 
 
+def _deck_totals_at(catalog: dict, focus: dict) -> dict[str, int]:
+    """`{"Grammar::A1::Verb to be": 6, …}` — los mazos de un nivel y su tamaño.
+
+    Es de lo que depende la cobertura: un mazo nuevo, uno borrado o una tarjeta
+    más y lo guardado deja de valer.
+    """
+    for skill in catalog["skills"]:
+        if skill["skill"] != focus["skill"]:
+            continue
+        for level in skill["levels"]:
+            if level["level"] == focus["level"]:
+                return {d["deck"]: int(d.get("total", 0)) for d in level["decks"]}
+    return {}
+
+
 @app.post("/api/generate/terms")
 def generate_terms(payload: dict | None = None) -> dict:
     """What is worth making cards for, read off the failures and the holes.
@@ -257,7 +278,8 @@ def generate_terms(payload: dict | None = None) -> dict:
         raise HTTPException(502, f"claude -p failed: {e}") from e
 
 
-def _syllabus_body(stored: dict, points: list[dict] | None = None) -> dict:
+def _syllabus_body(stored: dict, points: list[dict] | None = None,
+                   coverage: dict | None = None) -> dict:
     """La forma que devuelven las tres llamadas del temario.
 
     Leer, congelar y cubrir hablan del mismo objeto y la pantalla lo dibuja con
@@ -270,6 +292,7 @@ def _syllabus_body(stored: dict, points: list[dict] | None = None) -> dict:
         "skill": skill,
         "level": level,
         "frozen": True,
+        "unreadable": False,
         "points": points if points is not None else stored["points"],
         "covered": (sum(1 for p in points if p["covered_by"])
                     if points is not None else None),
@@ -277,6 +300,11 @@ def _syllabus_body(stored: dict, points: list[dict] | None = None) -> dict:
         "drafts": stored.get("drafts"),
         "generated": stored.get("generated"),
         "edited": stored.get("edited", False),
+        # Cuándo se calculó la cobertura que viaja en `points`, y contra qué
+        # mazos. Quien lee compara ese mapa con el de ahora y sabe si sigue
+        # valiendo; el servidor no lo juzga, porque juzgarlo costaría leer Anki
+        # y esta llamada promete no hacerlo.
+        "coverage": coverage,
         "path": str(syllabus_store.path_for(skill, level)),
     }
 
@@ -299,21 +327,41 @@ def syllabus_frozen(skill: str = "", level: str = "") -> dict:
     if not focus:
         raise HTTPException(400, "unknown skill or level")
 
-    stored = syllabus_store.load(focus["skill"], focus["level"])
+    # "No existe" y "existe y no se puede leer" son dos cosas distintas, y la
+    # pantalla las trataba igual: las dos contestaban `frozen: false` y el
+    # primer clic regeneraba. Sobre un archivo que no existe eso es correcto
+    # —es la primera vez del nivel, no hay nada que perder—; sobre uno roto es
+    # pisar trabajo tuyo sin preguntar.
+    state = syllabus_store.status(focus["skill"], focus["level"])
+    stored = syllabus_store.load(focus["skill"], focus["level"]) if state == "ok" else None
     if stored is None:
         return {
             "skill": focus["skill"],
             "level": focus["level"],
             "frozen": False,
+            "unreadable": state == "unreadable",
             "points": [],
             "covered": None,
             "total": 0,
             "drafts": None,
             "generated": None,
             "edited": False,
+            "coverage": None,
             "path": str(syllabus_store.path_for(focus["skill"], focus["level"])),
         }
-    return _syllabus_body(stored)
+
+    # Y la cobertura que ya se pagó, si sirve para estos puntos. Sigue sin
+    # modelo y sin Anki: es un archivo más, se lee en microsegundos, y es lo
+    # que hace que abrir un temario dos veces cueste medio minuto una vez y no
+    # dos.
+    cached = syllabus_store.load_coverage(
+        focus["skill"], focus["level"], stored["points"])
+    if cached is None:
+        return _syllabus_body(stored)
+
+    points = [{**p, **cached["by_point"][p["point"]]} for p in stored["points"]]
+    return _syllabus_body(stored, points,
+                          {"computed": cached["computed"], "decks": cached["decks"]})
 
 
 @app.post("/api/syllabus")
@@ -377,7 +425,9 @@ def syllabus_coverage(payload: dict | None = None) -> dict:
     if stored is None:
         raise HTTPException(409, "ese nivel todavía no tiene temario congelado")
 
-    decks = _decks_at(_catalog(), focus)
+    catalog = _catalog()
+    decks = _decks_at(catalog, focus)
+    totals = _deck_totals_at(catalog, focus)
 
     # Repartida entre los mazos y no por mazo: siete mazos a sesenta frentes
     # serían cuatrocientas líneas de prompt, y un tope por mazo dejaría al
@@ -397,7 +447,13 @@ def syllabus_coverage(payload: dict | None = None) -> dict:
     except llm.LLMError as e:
         raise HTTPException(502, f"claude -p failed: {e}") from e
 
-    return _syllabus_body(stored, points)
+    # Guardar lo que acaba de costar medio minuto, junto con los mazos contra
+    # los que se calculó. **Es lo único que esta llamada escribe**, y escribe
+    # en su propio archivo: el temario no se toca.
+    saved = syllabus_store.save_coverage(
+        skill, level, points, totals, datetime.now().isoformat(timespec="seconds"))
+    return _syllabus_body(stored, points,
+                          {"computed": saved["computed"], "decks": saved["decks"]})
 
 
 @app.post("/api/generate/cards")

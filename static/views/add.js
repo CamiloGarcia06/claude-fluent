@@ -14,7 +14,7 @@
 // entera. En serie cada término aterriza solo y el que falla cuesta sólo él.
 
 import {
-  $, el, plural, getJSON, catalog, ApiError,
+  $, el, plural, getJSON, catalog, ApiError, waiting, working,
 } from "/ui.js";
 
 // Medido: 15 s por término. La barra corre hacia el 90 % en ese tiempo y salta
@@ -127,14 +127,20 @@ async function suggestTerms() {
   const button = $("suggest");
   const topic = $("terms").value.trim();
 
-  button.disabled = true;
+  working(button, true);
   if (topic) {
-    hint(`Abriendo “${topic}” en términos…`);
+    hint(`Abriendo “${topic}” en términos… unos quince segundos.`);
   } else {
     hint(focus
-      ? `Buscando qué poner en ${focus.skill} ${focus.level}…`
-      : "Leyendo tus atascos y los huecos del catálogo… puede tardar unos segundos.");
+      ? `Buscando qué poner en ${focus.skill} ${focus.level}… unos quince segundos.`
+      : "Leyendo tus atascos y los huecos del catálogo… unos quince segundos.");
   }
+
+  // Donde van a aparecer los términos con su porqué. Antes había una frase
+  // quieta y un botón gris, que es lo mismo que ve una pantalla colgada.
+  $("reasons").hidden = false;
+  $("reasons").replaceChildren();
+  const stop = waiting($("reasons"), TERM_ESTIMATE_MS);
 
   try {
     const data = await getJSON("/api/generate/terms", {
@@ -142,7 +148,9 @@ async function suggestTerms() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...(focus || {}), topic }),
     });
+    stop();
     if (!data.terms.length) {
+      $("reasons").hidden = true;
       hint(topic
         ? `El modelo no sacó términos de “${topic}”. Probá con otras palabras.`
         : "No hay de dónde: ninguna tarjeta atascada y ningún nivel vacío.");
@@ -155,9 +163,11 @@ async function suggestTerms() {
          (topic ? ` a partir de “${topic}”` : "") +
          ". Borrá los que no quieras y dale a Generar.");
   } catch (error) {
+    stop(false);
+    $("reasons").hidden = true;
     hint(error.message);
   } finally {
-    button.disabled = false;
+    working(button, false);
   }
 }
 

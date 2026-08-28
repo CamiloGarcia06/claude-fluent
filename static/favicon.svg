@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Una ficha de cartón con su raya azul. El contorno va en gris medio para
+       que se lea igual sobre una barra clara y sobre una oscura; el acento es
+       #2a5580, la tinta con la que se escribe en este app. -->
+  <rect x="3.5" y="6.5" width="25" height="19" rx="3"
+        fill="none" stroke="#7c8188" stroke-width="2.5"/>
+  <path d="M8 12h16" stroke="#2a5580" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M8 17h16M8 21h10" stroke="#a8adb4" stroke-width="2" stroke-linecap="round"/>
+</svg>

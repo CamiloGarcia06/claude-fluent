@@ -5,7 +5,16 @@
 // It is not a review screen. Studying happens in Anki; the rows here only
 // decide which deck it opens on.
 
-import { $, el, plural, percent, getJSON, catalog } from "/ui.js";
+import {
+  $, el, plural, percent, getJSON, catalog, waiting, working, formatLongDate,
+  loadMotion, staggerStep, DURATION_MS,
+} from "/ui.js";
+
+// Las dos esperas más largas del app, medidas: el temario se congela una sola
+// vez y tarda cerca de dos minutos —tres borradores y una fusión—, y la
+// cobertura se deriva en cada lectura y tardó 27 s contra esta colección.
+const SYLLABUS_ESTIMATE_MS = 110000;
+const COVERAGE_ESTIMATE_MS = 30000;
 import { rail, slug } from "/views/progress.js";
 
 const topicOf = (deck) => deck.split("::").pop();
@@ -32,11 +41,15 @@ const MARKUP = `
 `;
 
 function deckRow(deck) {
-  const li = el("li");
+  // Tres columnas fijas y no una fila flex. Sólo la mitad de los mazos tiene
+  // algo para hoy, así que sólo la mitad lleva "Estudiar" — y con flex eso
+  // dejaba las cifras en dos verticales distintas según hubiera botón o no.
+  // La celda de la acción existe siempre; vacía cuando no hay nada que abrir.
+  const li = el("li", "level-row");
   li.append(el("span", "name", topicOf(deck.deck)));
 
   const counts = deck.due
-    ? `${deck.total} tarjetas · ${deck.due} para hoy`
+    ? `${plural(deck.total, "tarjeta", "tarjetas")} · ${deck.due} para hoy`
     : `${plural(deck.total, "tarjeta", "tarjetas")} · al día`;
   li.append(el("span", "count", counts));
 
@@ -45,6 +58,8 @@ function deckRow(deck) {
     study.type = "button";
     study.addEventListener("click", () => openInAnki(deck.deck, study));
     li.append(study);
+  } else {
+    li.append(el("span"));
   }
   return li;
 }
@@ -57,6 +72,37 @@ function deckRow(deck) {
 // Se pide a mano y no al entrar: es la llamada más lenta del app, cerca de un
 // minuto cuando el nivel ya tiene mazos, y nadie quiere esperarla para leer
 // una lista de mazos.
+
+// ── ¿La cobertura guardada todavía vale? ─────────────────────────────
+// De lo que depende es de los mazos de ese nivel y de cuántas tarjetas tiene
+// cada uno: un mazo nuevo, uno borrado o una tarjeta más y deja de valer. El
+// servidor guarda ese mapa junto con la respuesta y acá se compara con el de
+// ahora — dos mapas chicos, sin hash ni versión, así que las dos puntas no
+// tienen que ponerse de acuerdo en ningún algoritmo.
+
+const deckTotals = (level) =>
+  Object.fromEntries(level.decks.map((d) => [d.deck, d.total]));
+
+const cardsIn = (decks) =>
+  Object.values(decks || {}).reduce((n, v) => n + v, 0);
+
+function sameDecks(a, b) {
+  const names = Object.keys(a || {});
+  return names.length === Object.keys(b || {}).length
+    && names.every((name) => a[name] === b[name]);
+}
+
+/** "calculada hoy" / "calculada el jueves 27 de agosto". */
+function when(iso) {
+  const day = String(iso || "").slice(0, 10);
+  if (!day) return "calculada antes";
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+              + `-${String(now.getDate()).padStart(2, "0")}`;
+  return day === today
+    ? "calculada hoy"
+    : `calculada el ${formatLongDate(day).toLowerCase()}`;
+}
 
 function pointRow(point, data, skillName, levelName) {
   // `covered === null` es la cobertura todavía en vuelo. No es "no cubierto":
@@ -129,7 +175,48 @@ function syllabusFoot(data, onRegenerate) {
   return foot;
 }
 
-function renderSyllabus(box, data, skillName, levelName, onRegenerate) {
+/** El archivo está ahí y el app no lo entiende. Se dice, con la ruta, y la
+ *  decisión de pisarlo queda de tu lado.
+ *
+ *  Editar el **contenido** de un temario es seguro y es para lo que existe;
+ *  lo que rompe es la **forma** — una coma de más al borrar un punto, un
+ *  comentario `//`, los puntos escritos como texto suelto en vez de objetos.
+ *  Por eso el mensaje nombra la forma y no te dice "está mal". */
+function renderUnreadable(box, data, onRegenerate) {
+  box.replaceChildren();
+
+  const note = el("p", "syllabus-note");
+  note.append(el("span", null,
+    "El archivo de este temario existe pero el app no puede leerlo, así que no "
+    + "lo ve. No lo regenero solo: si lo editaste a mano, generar lo pisa."));
+  box.append(note);
+
+  const where = el("p", "sub-note");
+  where.append(el("span", null, "Está en "), el("span", "point-en", data.path),
+               el("span", null, ". Suele ser la forma y no el contenido: una coma "
+                 + "de más al borrar un punto, un comentario, o los puntos escritos "
+                 + "como texto suelto en vez de objetos con la clave \u201cpoint\u201d."));
+  box.append(where);
+
+  const foot = el("p", "syllabus-note");
+  foot.append(el("span", null, "Arreglalo y volvé a abrir el panel."));
+  const anyway = el("button", "ghost syllabus-again", "Regenerar de todos modos");
+  anyway.type = "button";
+  anyway.addEventListener("click", () => {
+    // La única acción destructiva de esta pantalla, y sobre el caso donde más
+    // probable es que haya trabajo tuyo adentro: pregunta siempre. Queda un
+    // `.json.bak` al lado igual, que es lo que faltaba el día que se perdió uno.
+    if (window.confirm(
+      "Este archivo puede tener ediciones tuyas que el app no logra leer. "
+      + "Regenerarlo lo pisa — queda una copia .json.bak al lado. ¿Seguimos?")) {
+      onRegenerate();
+    }
+  });
+  foot.append(anyway);
+  box.append(foot);
+}
+
+function renderSyllabus(box, data, skillName, levelName, onRegenerate, status) {
   box.replaceChildren();
 
   if (!data.points.length) {
@@ -137,9 +224,21 @@ function renderSyllabus(box, data, skillName, levelName, onRegenerate) {
     return;
   }
 
-  box.append(el("p", "syllabus-note", data.covered === null
+  // La primera línea dice qué estás viendo y **de cuándo es**. Sin la fecha,
+  // una cobertura guardada y una recién calculada se leen igual, y la que
+  // vale medio minuto es la segunda.
+  const head = el("p", "syllabus-note");
+  head.append(el("span", null, status?.text ?? (data.covered === null
     ? "Comparando el temario con tus mazos… cerca de un minuto."
-    : `${data.covered} de ${data.total} puntos cubiertos por tus mazos.`));
+    : `${data.covered} de ${data.total} puntos cubiertos por tus mazos.`)));
+  if (status?.action) {
+    const act = el("button", "ghost syllabus-again", status.action.label);
+    act.type = "button";
+    act.title = status.action.title || "";
+    act.addEventListener("click", status.action.run);
+    head.append(act);
+  }
+  box.append(head);
 
   const list = el("ul", "rows");
   for (const point of data.points) {
@@ -148,7 +247,8 @@ function renderSyllabus(box, data, skillName, levelName, onRegenerate) {
   box.append(list, syllabusFoot(data, onRegenerate));
 }
 
-async function loadSyllabus(button, box, skillName, levelName, regenerate = false) {
+async function loadSyllabus(button, box, skillName, levelName, decksNow, opts = {}) {
+  const { regenerate = false, recompute = false } = opts;
   // Dos paneles pueden estar cargando a la vez y "Regenerar" puede pisar una
   // cobertura en vuelo, así que cada corrida deja su número en el panel y sólo
   // pinta si sigue siendo la última.
@@ -156,10 +256,11 @@ async function loadSyllabus(button, box, skillName, levelName, regenerate = fals
   box.dataset.run = ticket;
   const mine = () => box.dataset.run === ticket;
 
-  button.disabled = true;
+  working(button, true);
   box.hidden = false;
 
-  const again = () => loadSyllabus(button, box, skillName, levelName, true);
+  const again = () => loadSyllabus(button, box, skillName, levelName, decksNow, { regenerate: true });
+  const update = () => loadSyllabus(button, box, skillName, levelName, decksNow, { recompute: true });
   const post = (path, extra) => getJSON(path, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -169,6 +270,11 @@ async function loadSyllabus(button, box, skillName, levelName, regenerate = fals
   box.replaceChildren(el("p", "syllabus-note", regenerate
     ? "Generando el temario de nuevo: tres borradores y una fusión. Un par de minutos."
     : "Leyendo el temario…"));
+
+  // La espera va donde va a aparecer el temario. Es la más larga del app —dos
+  // minutos la primera vez de un nivel— y hasta ahora eran dos minutos de una
+  // frase quieta bajo un botón gris.
+  let stop = regenerate ? waiting(box, SYLLABUS_ESTIMATE_MS) : null;
 
   let painted = false;
 
@@ -181,22 +287,68 @@ async function loadSyllabus(button, box, skillName, levelName, regenerate = fals
       `&level=${encodeURIComponent(levelName)}`);
     if (!mine()) return;
 
+    // El archivo existe y no se puede leer. **No se regenera solo**: sobre un
+    // nivel sin temario generar es correcto —es la primera vez, no hay nada que
+    // perder—, pero sobre un archivo roto es pisar trabajo tuyo sin preguntar,
+    // y la edición a mano es justamente para lo que este archivo se congeló.
+    if (data.unreadable && !regenerate) {
+      renderUnreadable(box, data, again);
+      painted = true;
+      return;
+    }
+
     if (!data.frozen) {
       box.replaceChildren(el("p", "syllabus-note", regenerate
         ? "Generando el temario de nuevo: tres borradores y una fusión. Un par de minutos."
         : "Primera vez de este nivel: tres borradores y una fusión. Un par de minutos."));
+      stop = waiting(box, SYLLABUS_ESTIMATE_MS);
       data = await post("/api/syllabus", { regenerate });
       if (!mine()) return;
     }
-    renderSyllabus(box, data, skillName, levelName, again);
+    stop?.();
+    // ── La cobertura que ya se pagó ──────────────────────────────────
+    // Sigue siendo un hecho derivado y sigue cambiando con cada tarjeta que
+    // escribís. Lo que cambia es la frecuencia: eso justifica recalcularla
+    // cuando algo cambió, no en cada lectura. Entre dos aperturas sin tocar
+    // una tarjeta, esos treinta segundos no compran nada.
+    const cached = data.coverage;
+    const fresh = cached && sameDecks(cached.decks, decksNow);
+
+    if (cached && !recompute) {
+      renderSyllabus(box, data, skillName, levelName, again, fresh ? {
+        text: `${data.covered} de ${data.total} puntos cubiertos por tus mazos · ${when(cached.computed)}`,
+        action: { label: "Recalcular", run: update,
+                  title: "Volver a preguntarle al modelo. Cerca de medio minuto." },
+      } : {
+        // Vieja, pero se pinta igual: son lo último que se supo, y borrar las
+        // marcas para poner "todavía nadie miró" sería saber menos que hace un
+        // rato. Lo que no se hace es recalcular sola — eso lo decidís vos.
+        text: `${data.covered} de ${data.total} puntos, ${when(cached.computed)} `
+            + `sobre ${plural(cardsIn(cached.decks), "tarjeta", "tarjetas")}. `
+            + `Ahora este nivel tiene ${cardsIn(decksNow)}.`,
+        action: { label: "Actualizar", run: update,
+                  title: "Volver a comparar el temario con tus mazos de ahora. Cerca de medio minuto." },
+      });
+      return;
+    }
+
+    // Sin nada guardado —o pediste recalcular— hay que pagar la mitad lenta.
+    // Con lo viejo en pantalla mientras tanto, si lo había.
+    renderSyllabus(box, data, skillName, levelName, again, cached
+      ? { text: "Actualizando la cobertura… cerca de medio minuto." }
+      : undefined);
     painted = true;
 
-    // Y recién ahora la mitad lenta. Cambia con cada tarjeta que escribís, así
-    // que se deriva siempre —pero con los puntos ya en pantalla, que es la
-    // diferencia entre esperar y creer que empezó de cero.
+    stop = waiting(box, COVERAGE_ESTIMATE_MS, box.children[1]);
     const covered = await post("/api/syllabus/coverage");
     if (!mine()) return;
-    renderSyllabus(box, covered, skillName, levelName, again);
+    stop();
+    stop = null;
+    renderSyllabus(box, covered, skillName, levelName, again, {
+      text: `${covered.covered} de ${covered.total} puntos cubiertos por tus mazos · calculada recién`,
+      action: { label: "Recalcular", run: update,
+                title: "Volver a preguntarle al modelo. Cerca de medio minuto." },
+    });
   } catch (error) {
     // El temario es un extra sobre una pantalla que ya sirve, así que su fallo
     // se queda dentro de su propio panel: no se tira al router ni borra la
@@ -204,10 +356,11 @@ async function loadSyllabus(button, box, skillName, levelName, regenerate = fals
     // aviso se agrega debajo: que se caiga la cobertura no es razón para
     // borrar el temario, que se leyó bien.
     if (!mine()) return;
+    stop?.(false);
     const note = el("p", "syllabus-note", error.message);
     if (painted) box.append(note); else box.replaceChildren(note);
   } finally {
-    if (mine()) button.disabled = false;
+    if (mine()) working(button, false);
   }
 }
 
@@ -248,8 +401,11 @@ function levelPanel(level, skill, threshold) {
   button.type = "button";
   const box = el("div", "syllabus");
   box.hidden = true;
+  // Los mazos de este nivel tal como están ahora: es contra esto que se juzga
+  // si la cobertura guardada todavía vale.
+  const decksNow = deckTotals(level);
   button.addEventListener("click", () =>
-    loadSyllabus(button, box, skill.skill, level.level));
+    loadSyllabus(button, box, skill.skill, level.level, decksNow));
   meta.append(button);
   section.append(box);
 
@@ -305,9 +461,33 @@ export async function render(root, params) {
     $("skill-actions").hidden = false;
   }
 
+  // Los cinco niveles en una columna, no en una rejilla de dos. A1 suele
+  // llevar doce mazos y A2 dos, así que en dos columnas la segunda fila
+  // esperaba a la primera y quedaba un agujero de ochocientos píxeles al lado
+  // de A2. Y en una columna el orden vuelve a ser el que la pantalla cuenta:
+  // A1 → C1, el mismo del riel de arriba.
   const levels = $("levels");
-  levels.className = "columns";
   for (const level of skill.levels) {
     levels.append(levelPanel(level, skill, data.maturity_threshold));
   }
+
+  playEntrance();
+}
+
+// El riel entra con el vocabulario del tablero: escala desde la izquierda,
+// escalonado, dentro del mismo presupuesto de 300 ms. Nunca `width`, que
+// reflowaría la fila entera en cada cuadro.
+function playEntrance() {
+  loadMotion().then((motion) => {
+    if (!motion) return;
+    const { animate, stagger } = motion;
+    const fills = document.querySelectorAll("#skill .seg-fill");
+    if (!fills.length) return;
+    animate(fills, {
+      scaleX: [0, 1],
+      duration: DURATION_MS,
+      delay: stagger(staggerStep(fills.length)),
+      ease: "outQuad",
+    });
+  });
 }

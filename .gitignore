@@ -2,3 +2,6 @@ __pycache__/
 .venv/
 data/
 *.log
+
+# Capturas de trabajo del MCP de Playwright: evidencia, no fuente.
+.playwright-mcp/
