@@ -5,3 +5,7 @@ data/
 
 # Capturas de trabajo del MCP de Playwright: evidencia, no fuente.
 .playwright-mcp/
+
+# Skills de terceros instaladas desde GitHub. El lock dice cuáles y en qué
+# versión; el contenido se baja, no se versiona.
+.agents/
