@@ -1,7 +1,7 @@
 """Adaptadores de SessionStore y PatternStore sobre el módulo plano practice.py
 (JSON en data/practice/)."""
 
-from fluent import practice
+from fluent.writing.infrastructure import sessions as practice
 
 
 class DiskSessions:
