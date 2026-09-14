@@ -12,60 +12,20 @@ the whole answer; per term, the screen fills in as each one lands and a failure
 costs that term only.
 """
 
-import re
-
 from fluent import anki, llm
+from fluent.cards.domain.decks import (  # noqa: F401
+    _canonical,
+    _clean_topic,
+    deck_for,
+    focus_for,
+)
+from fluent.cards.domain.model import (  # noqa: F401
+    MODEL_CSS,
+    MODEL_FIELDS,
+    MODEL_NAME,
+    MODEL_TEMPLATES,
+)
 from fluent.collection.domain import analysis
-
-# The note type this app writes. Stock Basic has no room for an example
-# sentence, and the example is what makes a vocabulary card usable instead of
-# a word pair you can recite without understanding.
-MODEL_NAME = "claude-fluent"
-MODEL_FIELDS = ["Front", "Back", "Ejemplo"]
-
-# One card per note, English -> Spanish. The reverse direction is a different
-# skill and deserves its own deck rather than a second template that doubles
-# every count silently.
-MODEL_TEMPLATES = [
-    {
-        "Name": "Reconocer",
-        "Front": "{{Front}}",
-        "Back": "{{FrontSide}}\n<hr id=answer>\n{{Back}}\n"
-        '{{#Ejemplo}}<div class="ejemplo">{{Ejemplo}}</div>{{/Ejemplo}}',
-    }
-]
-
-# La ficha de cartón, en Anki: papel frío, tinta grafito, sin sombras. La regla
-# impresa separa la pregunta de la respuesta y el ejemplo va en gris, un paso
-# por detrás de la traducción.
-MODEL_CSS = """.card {
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  font-size: 22px;
-  line-height: 1.5;
-  color: #1b1d20;
-  background: #fbfbfa;
-  text-align: center;
-  padding: 24px 16px;
-}
-hr#answer {
-  border: 0;
-  border-top: 1px solid rgba(27, 29, 32, 0.13);
-  margin: 20px auto;
-  max-width: 32ch;
-}
-.ejemplo {
-  margin-top: 16px;
-  font-size: 17px;
-  font-style: italic;
-  color: #7c8188;
-}
-.card.nightMode, .nightMode .card {
-  color: #e9eaec;
-  background: #17181b;
-}
-.nightMode hr#answer { border-top-color: rgba(255, 255, 255, 0.13); }
-.nightMode .ejemplo { color: #858b93; }
-"""
 
 # Ten per run, as the wireframe says. Each term is a separate call of 8-15s, so
 # a run of ten already takes a couple of minutes.
@@ -651,47 +611,6 @@ def cover(
 # Anki, so nothing here is used as it arrives: the skill and the level must be
 # ones this app knows, and the topic is scrubbed of the separator that would
 # otherwise let a topic invent a level of its own.
-
-
-def _canonical(value: str, allowed: tuple[str, ...]) -> str | None:
-    value = str(value or "").strip()
-    for option in allowed:
-        if value.lower() == option.lower():
-            return option
-    return None
-
-
-def _clean_topic(value: str) -> str:
-    topic = re.sub(r"\s+", " ", str(value or "")).strip(" :")
-    topic = topic.replace("::", " ")  # "::" is the level separator, not text
-    return topic[:60]
-
-
-def deck_for(skill: str, level: str, topic: str) -> str | None:
-    """`Skill::Level::Topic`, or None when the model named something this app
-    does not recognise. The screen then asks for the deck instead of guessing:
-    a card filed under a level that does not exist is worse than an unfiled one.
-    """
-    canonical_skill = _canonical(skill, analysis.SKILLS)
-    canonical_level = _canonical(level, analysis.LEVELS)
-    clean_topic = _clean_topic(topic)
-    if not (canonical_skill and canonical_level and clean_topic):
-        return None
-    return f"{canonical_skill}::{canonical_level}::{clean_topic}"
-
-
-def focus_for(skill: str, level: str) -> dict | None:
-    """A `{skill, level}` this app recognises, or None.
-
-    The pair arrives from the URL and ends up inside a prompt, so it is checked
-    against the app's own lists: a skill nobody has heard of would ask a
-    nonsense question in fluent English.
-    """
-    canonical_skill = _canonical(skill, analysis.SKILLS)
-    canonical_level = _canonical(level, analysis.LEVELS)
-    if canonical_skill and canonical_level:
-        return {"skill": canonical_skill, "level": canonical_level}
-    return None
 
 
 def propose_cards(term: str, catalog: dict, count: int = 3, focus: dict | None = None) -> dict:

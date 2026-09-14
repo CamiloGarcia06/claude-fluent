@@ -13,8 +13,8 @@ CALENDAR_DAYS = 30
 # The catalogue is derived from the deck name on every read, following the
 # convention Skill::Level::Topic. Nothing is stored: renaming a deck in Anki
 # reclassifies it, and there is no mapping on disk to drift out of date.
-SKILLS = ("Grammar", "Writing", "Speaking", "Listening", "Reading")
-LEVELS = ("A1", "A2", "B1", "B2", "C1")
+from fluent.shared.types import LEVELS, SKILLS  # noqa: E402,F401  (el esquema del nombre de mazo)
+
 UNCLASSIFIED = "Sin clasificar"
 
 # A level counts as held once this share of its cards is mature — Anki's own

@@ -9,9 +9,14 @@ Hecho: la funcionalidad `collection` (el análisis de la colección: `Review`,
 `analysis.py`, casos de uso `BuildToday/Catalog/Stuck`, puerto
 `CollectionReader` y adaptador `AnkiReader` sobre el `anki.py` plano). `app.py`
 pasó a `main.py` (raíz de composición + endpoints aún planos + el traductor
-de errores de dominio). Siguiente: `cards` (generate/repair/snapshot),
-`syllabus`, `practice`; después `anki.py` y `llm.py` a infraestructura y los
-endpoints a routers por funcionalidad.
+de errores de dominio). También `cards`: dominio (nombres de mazo, tipo de nota, texto HTML↔plano,
+errores), puertos `CardStore` y `Proposer`, casos de uso ProposeTerms /
+ProposeCards / WriteNotes / RepairNote / ApplyRepair, y adaptadores sobre
+`anki.py`, `snapshot.py`, `generate.py` y `repair.py` (que siguen planos: los
+prompts y la regla de snapshot viven ahí). `shared/types.py` tiene SKILLS,
+LEVELS y Review. Siguiente: `syllabus`, `practice`; después `anki.py`,
+`snapshot.py`, `llm.py` y los prompts a infraestructura, y los endpoints a
+routers por funcionalidad.
 
 - `task check` antes de cualquier PR (ruff, pyright básico, pytest, hexcheck).
 - Los tests corren contra una raíz temporal (`FLUENT_ROOT`): nunca tocan `data/`.

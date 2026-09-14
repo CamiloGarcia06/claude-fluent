@@ -18,6 +18,16 @@ class Unavailable(DomainError):
     code = "unavailable"
 
 
+class Upstream(DomainError):
+    """Algo de fuera respondió mal: el modelo devolvió basura o falló a mitad."""
+
+    code = "upstream"
+
+
+class NotFound(DomainError):
+    code = "not_found"
+
+
 class Conflict(DomainError):
     code = "conflict"
 

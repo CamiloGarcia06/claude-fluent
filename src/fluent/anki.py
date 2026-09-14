@@ -1,7 +1,5 @@
 """AnkiConnect client. Anki must be running with the AnkiConnect add-on."""
 
-import html
-import re
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any, Iterator
@@ -10,6 +8,11 @@ import httpx
 
 # Los tipos del revlog viven en el dominio de la colección; se reexportan
 # aquí para el código plano que todavía los importa de este módulo.
+from fluent.cards.domain.text import (  # noqa: F401
+    strip_html,
+    to_field_html,
+    to_plain_text,
+)
 from fluent.collection.domain.review import (  # noqa: F401
     AGAIN,
     EASY,
@@ -243,32 +246,6 @@ def reviews_since(timestamp_ms: int) -> list[Review]:
         out.extend(Review.from_row(row, deck) for row in rows)
     out.sort(key=lambda r: r.timestamp_ms)
     return out
-
-
-def strip_html(value: str) -> str:
-    """Collapse a field to a single line. For list rows, not for editing."""
-    text = re.sub(r"<[^>]+>", " ", value)
-    return " ".join(html.unescape(text).replace("\xa0", " ").split())
-
-
-def to_plain_text(value: str) -> str:
-    """Field value -> editable plain text, keeping the line structure.
-
-    Anki stores fields as HTML, so line breaks live in <br> and block tags.
-    Collapsing them the way strip_html does would silently flatten a card into
-    one line the moment it was written back.
-    """
-    text = re.sub(r"<br\s*/?>", "\n", value, flags=re.I)
-    text = re.sub(r"</(p|div|li|tr)>", "\n", text, flags=re.I)
-    text = re.sub(r"<[^>]+>", "", text)
-    text = html.unescape(text).replace("\xa0", " ")
-    return "\n".join(line.strip() for line in text.split("\n")).strip()
-
-
-def to_field_html(text: str) -> str:
-    """Plain text -> what Anki stores. Escaped, so a stray < cannot become
-    markup, with newlines as the <br> Anki actually renders."""
-    return html.escape(text, quote=False).replace("\n", "<br>")
 
 
 def note_info(note_id: int) -> dict:
