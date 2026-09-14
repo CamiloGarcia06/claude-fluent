@@ -30,7 +30,7 @@ from fluent.collection.domain import analysis
 from fluent.collection.infrastructure.anki_reader import AnkiReader
 from fluent.paths import STATIC_DIR
 from fluent.shared.clock import SystemClock
-from fluent.shared.errors import Conflict, DomainError, Invalid, Unavailable
+from fluent.shared.errors import Conflict, DomainError, Invalid, NotFound, Unavailable, Upstream
 from fluent.syllabi.application.cover_syllabus import CoverSyllabus
 from fluent.syllabi.application.freeze_syllabus import FreezeSyllabus
 from fluent.syllabi.application.read_syllabus import ReadSyllabus
@@ -76,20 +76,29 @@ get_patterns_uc = GetPatterns(_patterns)
 mark_pattern_uc = MarkPattern(_patterns)
 
 
+# Un solo traductor de errores de dominio a HTTP. Lo inválido sigue siendo 400,
+# como devolvían los endpoints planos; 422 es de FastAPI para cuerpos mal formados.
+STATUS_BY_ERROR: tuple[tuple[type[DomainError], int], ...] = (
+    (Unavailable, 503),
+    (Upstream, 502),
+    (NotFound, 404),
+    (Conflict, 409),
+    (Invalid, 400),
+)
+
+
+def status_for(exc: DomainError) -> int:
+    for kind, status in STATUS_BY_ERROR:
+        if isinstance(exc, kind):
+            return status
+    return 400
+
+
 @app.exception_handler(DomainError)
 def translate_domain_error(_: Request, exc: DomainError) -> JSONResponse:
-    """El único traductor de errores de dominio a HTTP."""
-    status = (
-        503
-        if isinstance(exc, Unavailable)
-        else 409
-        if isinstance(exc, Conflict)
-        else 422
-        if isinstance(exc, Invalid)
-        else 400
-    )
     return JSONResponse(
-        status_code=status, content={"detail": exc.message or exc.code, "error": exc.code}
+        status_code=status_for(exc),
+        content={"detail": exc.message or exc.code, "error": exc.code},
     )
 
 
