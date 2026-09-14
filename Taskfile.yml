@@ -43,7 +43,8 @@ tasks:
       - task: test
       - task: hex
   restart:
-    desc: reinicia el servicio de usuario y comprueba /api/health
+    desc: reinicia el servicio de usuario y comprueba /api/health (solo con check en verde)
+    deps: [check]
     cmds:
       - systemctl --user restart claude-fluent.service
       - sleep 2
