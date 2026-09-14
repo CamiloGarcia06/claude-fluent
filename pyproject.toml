@@ -1,0 +1,64 @@
+[project]
+name = "claude-fluent"
+version = "0"
+description = "App personal para mejorar mi inglés: sincroniza, analiza y genera tarjetas de Anki"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.141",
+    "uvicorn[standard]>=0.52",
+    "httpx>=0.28",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.13,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "fluent"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.12",
+    "pyright>=1.1",
+    "hexcheck",
+]
+
+[tool.uv.sources]
+hexcheck = { git = "https://github.com/CamiloGarcia06/hexcheck", tag = "v0.1.0" }
+
+# Migración en curso hacia hexagonal-fastapi: `task hex` corre con --warn hasta
+# que el paquete tenga funcionalidades. Las excepciones se retiran una a una.
+[tool.hexcheck]
+src = "src/fluent"
+tests = "tests"
+allow = [
+    "src/fluent/main.py: H006 # endpoints planos: HTTPException se va al traductor a medida que migran",
+    "src/fluent/paths.py: H008 # FLUENT_ROOT se lee aquí hasta que exista shared/config.py",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = ["static"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+# El código plano se formatea al migrar cada módulo, no todo de golpe.
+ignore = ["E501", "E731", "B008", "B904", "UP"]
+
+[tool.pyright]
+pythonVersion = "3.13"
+venvPath = "."
+venv = ".venv"
+include = ["src", "tests"]
+typeCheckingMode = "basic"
+# Deuda de la migración: Optional sin estrechar en el código plano. Avisan, no
+# rompen; se arreglan al mover cada módulo a su capa.
+reportArgumentType = "warning"
+reportOptionalMemberAccess = "warning"
+reportAssignmentType = "warning"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

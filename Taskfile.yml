@@ -1,0 +1,51 @@
+# Mismo Taskfile que los servicios del estándar, sin deploy: este app vive en
+# el portátil (depende de Anki de escritorio) como servicio de usuario systemd.
+version: "3"
+
+vars:
+  APP: fluent
+  PERSONAL_EMAIL: juancasangar@hotmail.com
+
+tasks:
+  dev:
+    desc: servidor local con recarga (http://127.0.0.1:8001; el servicio ocupa el 8000)
+    cmds:
+      - uv run uvicorn {{.APP}}.main:app --reload --port 8001
+  fmt:
+    cmds:
+      - uv run ruff format src tests
+      - uv run ruff check --fix src tests
+  lint:
+    cmds:
+      - uv run ruff check src tests
+  types:
+    cmds:
+      - uv run pyright
+  test:
+    cmds:
+      - uv run pytest -q
+  hex:
+    desc: verificador del estándar (las excepciones de la migración están en pyproject)
+    cmds:
+      - uv run hexcheck
+  identity:
+    silent: true
+    cmds:
+      - |
+        email=$(git config user.email)
+        [ "$email" = "{{.PERSONAL_EMAIL}}" ] || { echo "identidad git: $email" >&2; exit 1; }
+  check:
+    desc: todo lo que comprueba el CI
+    cmds:
+      - task: identity
+      - task: lint
+      - task: types
+      - task: test
+      - task: hex
+  restart:
+    desc: reinicia el servicio de usuario y comprueba /api/health (solo con check en verde)
+    deps: [check]
+    cmds:
+      - systemctl --user restart claude-fluent.service
+      - sleep 2
+      - curl -fsS http://127.0.0.1:8000/api/health

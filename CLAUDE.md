@@ -1,5 +1,40 @@
 # claude-fluent
 
+Sigue la skill global `hexagonal-fastapi`. **Migración en curso** (Fase 6 del
+plan de la plataforma personal): el paquete ya vive en `src/fluent/` con uv,
+Taskfile y tests de caracterización, pero el código sigue plano. `task hex`
+corre `hexcheck --warn` hasta que existan funcionalidades; cada módulo que se
+mueva a `domain/`, `application/` o `infrastructure/` retira sus excepciones.
+Hecho: la funcionalidad `collection` (el análisis de la colección: `Review`,
+`analysis.py`, casos de uso `BuildToday/Catalog/Stuck`, puerto
+`CollectionReader` y adaptador `AnkiReader` sobre el `anki.py` plano). `app.py`
+pasó a `main.py` (raíz de composición + endpoints aún planos + el traductor
+de errores de dominio). También `cards`: dominio (nombres de mazo, tipo de nota, texto HTML↔plano,
+errores), puertos `CardStore` y `Proposer`, casos de uso ProposeTerms /
+ProposeCards / WriteNotes / RepairNote / ApplyRepair, y adaptadores sobre
+`anki.py`, `snapshot.py`, `generate.py` y `repair.py` (que siguen planos: los
+prompts y la regla de snapshot viven ahí). `shared/types.py` tiene SKILLS,
+LEVELS y Review. También `syllabi` (temario: ReadSyllabus / FreezeSyllabus / CoverSyllabus
+sobre `syllabus.py` y `generate.py`) y `writing` (práctica de escritura:
+GetPractice / StartSession / AnswerTurn / CloseSession / GetPatterns /
+MarkPattern sobre `practice.py` y `coach.py`). `shared/clock.py` es el reloj
+real; cada dominio declara su puerto `Clock`. Todos los endpoints son ya de
+una línea. Siguiente: `anki.py`, `snapshot.py`, `llm.py`, `generate.py`,
+`repair.py`, `coach.py`, `practice.py` y `syllabus.py` dejan de ser planos
+(cada uno a la infraestructura de su funcionalidad), los endpoints pasan a
+routers, y se retiran las dos excepciones de hexcheck.
+
+- `task check` antes de cualquier PR (ruff, pyright básico, pytest, hexcheck).
+- Los tests corren contra una raíz temporal (`FLUENT_ROOT`): nunca tocan `data/`.
+- `data/` y `static/` siguen en la raíz del repo; `src/fluent/paths.py` es el
+  único sitio que sabe dónde están.
+- El servicio de usuario `claude-fluent.service` (dotfiles) arranca
+  `.venv/bin/uvicorn fluent.main:app` con el repo como directorio de trabajo;
+  `task restart` lo reinicia y comprueba `/api/health`. Para desarrollar sin
+  chocar con él: `task dev` (puerto 8001).
+
+## Particularidades (el CLAUDE.md original, aún vigente)
+
 Personal app to improve my English. **Single user: me.** Not a product, will not
 be scaled, will never have other users.
 
