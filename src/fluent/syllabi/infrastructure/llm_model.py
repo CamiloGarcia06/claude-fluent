@@ -1,20 +1,29 @@
-"""Adaptador del puerto SyllabusModel sobre generate.py (prompts + claude -p)."""
+"""Adaptador del puerto SyllabusModel: los prompts del temario sobre el modelo
+inyectado."""
 
-from fluent import generate, llm
+from collections.abc import Callable
+
+from fluent.shared.errors import Upstream
 from fluent.syllabi.domain.errors import ModelFailed
+from fluent.syllabi.infrastructure import prompts
+
+Generate = Callable[..., tuple[dict, int]]
 
 
 class LlmSyllabusModel:
+    def __init__(self, generate: Generate) -> None:
+        self._generate = generate
+
     def build(self, skill: str, level: str) -> dict:
         try:
-            return generate.build_syllabus(skill, level)
-        except llm.LLMError as e:
+            return prompts.build_syllabus(self._generate, skill, level)
+        except Upstream as e:
             raise ModelFailed(f"claude -p failed: {e}") from e
 
     def cover(
         self, skill: str, level: str, points: list[dict], deck_topics: list[str], have: list[str]
     ) -> list[dict]:
         try:
-            return generate.cover(skill, level, points, deck_topics, have)
-        except llm.LLMError as e:
+            return prompts.cover(self._generate, skill, level, points, deck_topics, have)
+        except Upstream as e:
             raise ModelFailed(f"claude -p failed: {e}") from e

@@ -2,7 +2,6 @@
 
 from fastapi.testclient import TestClient
 
-from fluent import anki, state
 from fluent import main as app_module
 
 
@@ -11,7 +10,7 @@ def client() -> TestClient:
 
 
 def test_health_without_anki(monkeypatch):
-    monkeypatch.setattr(anki, "is_alive", lambda: False)
+    monkeypatch.setattr(app_module.app.state.anki, "is_alive", lambda: False)
     body = client().get("/api/health").json()
     assert body["anki"] is False
     assert set(body) == {"anki", "claude", "last_sync", "syllabus"}
@@ -25,11 +24,11 @@ def test_settings_round_trip_and_validation():
     assert c.get("/api/settings").json() == {"daily_goal": 25}
     assert c.post("/api/settings", json={"daily_goal": 1}).status_code == 400
     assert c.post("/api/settings", json={"daily_goal": "x"}).status_code == 400
-    assert state.read()["daily_goal"] == 25
+    assert app_module.app.state.settings.read()["daily_goal"] == 25
 
 
 def test_today_is_503_without_anki(monkeypatch):
-    monkeypatch.setattr(anki, "is_alive", lambda: False)
+    monkeypatch.setattr(app_module.app.state.anki, "is_alive", lambda: False)
     assert client().get("/api/today").status_code == 503
 
 
