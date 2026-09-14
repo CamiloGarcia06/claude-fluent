@@ -1,19 +1,54 @@
-"""FastAPI backend. Serves the API and the static front end."""
+"""Raíz de composición y, mientras dure la migración, también los endpoints.
+
+Las funcionalidades ya migradas (collection) entran como casos de uso cableados
+aquí; el resto sigue plano. Un solo traductor de errores de dominio a HTTP."""
+
 import shutil
 from datetime import date, datetime, timedelta
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from fluent import analysis, anki, coach, generate, llm, practice, repair, snapshot, state
+from fluent import anki, coach, generate, llm, practice, repair, snapshot, state
 
 # Con alias: `syllabus` es el nombre de la mitad del app —el endpoint, la
 # pantalla, el archivo— y el módulo se lee dentro de las funciones que lo
 # sirven. Sin alias, cualquier nombre local lo taparía.
 from fluent import syllabus as syllabus_store
+from fluent.collection.application.build_catalog import BuildCatalog
+from fluent.collection.application.build_stuck import BuildStuck
+from fluent.collection.application.build_today import BuildToday
+from fluent.collection.domain import analysis
+from fluent.collection.infrastructure.anki_reader import AnkiReader
 from fluent.paths import STATIC_DIR
+from fluent.shared.errors import Conflict, DomainError, Invalid, Unavailable
 
 app = FastAPI(title="claude-fluent")
+
+# --- composición: adaptadores y casos de uso de las funcionalidades migradas
+_collection = AnkiReader()
+build_today = BuildToday(_collection)
+build_catalog = BuildCatalog(_collection)
+build_stuck = BuildStuck(_collection)
+
+
+@app.exception_handler(DomainError)
+def translate_domain_error(_: Request, exc: DomainError) -> JSONResponse:
+    """El único traductor de errores de dominio a HTTP."""
+    status = (
+        503
+        if isinstance(exc, Unavailable)
+        else 409
+        if isinstance(exc, Conflict)
+        else 422
+        if isinstance(exc, Invalid)
+        else 400
+    )
+    return JSONResponse(
+        status_code=status, content={"detail": exc.message or exc.code, "error": exc.code}
+    )
+
 
 # The Atascos screen is the whole ranking, not the head of it that Today shows.
 STUCK_LIMIT = 50
@@ -94,64 +129,22 @@ def health() -> dict:
 
 @app.get("/api/today")
 def today() -> dict:
-    if not anki.is_alive():
-        raise HTTPException(503, "AnkiConnect is not answering — is Anki running?")
-
-    reviews = anki.reviews_since(_window_start_ms())
-    deck_counts = anki.due_counts()
-    summary = analysis.summary(reviews, deck_counts, date.today())
-    summary["goal"] = state.read()["daily_goal"]
-
-    # analysis.py stays pure, so the card text is looked up here and merged in.
-    details = anki.card_summaries([c["card_id"] for c in summary["failing"]])
-    for card in summary["failing"]:
-        found = details.get(card["card_id"], {})
-        card["front"] = found.get("front", "")
-        card["note_id"] = found.get("note_id")
-
-    return summary
+    return build_today(date.today(), _window_start_ms(), state.read()["daily_goal"])
 
 
 @app.get("/api/catalog")
 def catalog() -> dict:
-    """The deck catalogue, skill -> level -> decks.
-
-    The classification comes from the deck name every time it is read; there is
-    nothing stored to keep in sync. Renaming a deck in Anki is the whole
-    editing interface.
-    """
-    if not anki.is_alive():
-        raise HTTPException(503, "AnkiConnect is not answering — is Anki running?")
-
-    return analysis.catalog(anki.deck_card_stats(), anki.due_counts())
+    """The deck catalogue, skill -> level -> decks. The classification comes
+    from the deck name every time it is read; renaming a deck in Anki is the
+    whole editing interface."""
+    return build_catalog()
 
 
 @app.get("/api/stuck")
 def stuck() -> dict:
     """The full list of cards you keep failing, with severity and the minutes
     they cost. The Today screen shows the head of this same ranking."""
-    if not anki.is_alive():
-        raise HTTPException(503, "AnkiConnect is not answering — is Anki running?")
-
-    reviews = analysis.english_only(anki.reviews_since(_window_start_ms()))
-    cards = analysis.struggling(reviews, limit=STUCK_LIMIT)
-
-    # analysis.py stays pure, so the card text is looked up here and merged in.
-    details = anki.card_summaries([c["card_id"] for c in cards])
-    for card in cards:
-        found = details.get(card["card_id"], {})
-        card["front"] = found.get("front", "")
-        card["note_id"] = found.get("note_id")
-        card["severity"] = analysis.severity(card)
-
-    total_cards = sum(d["total"] for d in anki.deck_card_stats()
-                      if analysis.in_scope(d["deck"]))
-    total_seconds = sum(r.duration_ms for r in reviews) / 1000.0
-    return {
-        "cards": cards,
-        "impact": analysis.impact(cards, total_cards, total_seconds),
-        "window": {"days": analysis.CALENDAR_DAYS, "reviews": len(reviews)},
-    }
+    return build_stuck(_window_start_ms(), STUCK_LIMIT)
 
 
 @app.post("/api/study")
@@ -171,9 +164,7 @@ def study(deck: str | None = None) -> dict:
     else:
         # Never forward an unchecked name to guiDeckReview: a deck that does
         # not exist opens the reviewer on nothing and looks like a hang.
-        target = next(
-            (d for d in due["decks"] if d["deck"] == deck and d["due"] > 0), None
-        )
+        target = next((d for d in due["decks"] if d["deck"] == deck and d["due"] > 0), None)
     if target is None:
         raise HTTPException(409, "No hay tarjetas pendientes hoy.")
 
@@ -201,7 +192,8 @@ def _stuck_with_text(limit: int) -> list[dict]:
     read the cards, not their ids.
     """
     cards = analysis.struggling(
-        analysis.english_only(anki.reviews_since(_window_start_ms())), limit=limit)
+        analysis.english_only(anki.reviews_since(_window_start_ms())), limit=limit
+    )
     details = anki.card_summaries([c["card_id"] for c in cards])
     for card in cards:
         card["front"] = details.get(card["card_id"], {}).get("front", "")
@@ -251,8 +243,7 @@ def generate_terms(payload: dict | None = None) -> dict:
     if not anki.is_alive():
         raise HTTPException(503, "AnkiConnect is not answering — is Anki running?")
 
-    focus = generate.focus_for(
-        (payload or {}).get("skill", ""), (payload or {}).get("level", ""))
+    focus = generate.focus_for((payload or {}).get("skill", ""), (payload or {}).get("level", ""))
 
     catalog = _catalog()
 
@@ -266,14 +257,19 @@ def generate_terms(payload: dict | None = None) -> dict:
 
     try:
         return generate.propose_terms(
-            _stuck_with_text(STUCK_FOR_PROMPT), catalog, focus,
-            topic=(payload or {}).get("topic", ""), have=have)
+            _stuck_with_text(STUCK_FOR_PROMPT),
+            catalog,
+            focus,
+            topic=(payload or {}).get("topic", ""),
+            have=have,
+        )
     except llm.LLMError as e:
         raise HTTPException(502, f"claude -p failed: {e}") from e
 
 
-def _syllabus_body(stored: dict, points: list[dict] | None = None,
-                   coverage: dict | None = None) -> dict:
+def _syllabus_body(
+    stored: dict, points: list[dict] | None = None, coverage: dict | None = None
+) -> dict:
     """La forma que devuelven las tres llamadas del temario.
 
     Leer, congelar y cubrir hablan del mismo objeto y la pantalla lo dibuja con
@@ -288,8 +284,7 @@ def _syllabus_body(stored: dict, points: list[dict] | None = None,
         "frozen": True,
         "unreadable": False,
         "points": points if points is not None else stored["points"],
-        "covered": (sum(1 for p in points if p["covered_by"])
-                    if points is not None else None),
+        "covered": (sum(1 for p in points if p["covered_by"]) if points is not None else None),
         "total": len(stored["points"]),
         "drafts": stored.get("drafts"),
         "generated": stored.get("generated"),
@@ -348,14 +343,14 @@ def syllabus_frozen(skill: str = "", level: str = "") -> dict:
     # modelo y sin Anki: es un archivo más, se lee en microsegundos, y es lo
     # que hace que abrir un temario dos veces cueste medio minuto una vez y no
     # dos.
-    cached = syllabus_store.load_coverage(
-        focus["skill"], focus["level"], stored["points"])
+    cached = syllabus_store.load_coverage(focus["skill"], focus["level"], stored["points"])
     if cached is None:
         return _syllabus_body(stored)
 
     points = [{**p, **cached["by_point"][p["point"]]} for p in stored["points"]]
-    return _syllabus_body(stored, points,
-                          {"computed": cached["computed"], "decks": cached["decks"]})
+    return _syllabus_body(
+        stored, points, {"computed": cached["computed"], "decks": cached["decks"]}
+    )
 
 
 @app.post("/api/syllabus")
@@ -369,8 +364,7 @@ def syllabus_freeze(payload: dict | None = None) -> dict:
     No toca Anki. Qué enseña un A1 es un hecho externo y no depende de tu
     colección, así que esto funciona con Anki cerrado. **No escribe en Anki.**
     """
-    focus = generate.focus_for(
-        (payload or {}).get("skill", ""), (payload or {}).get("level", ""))
+    focus = generate.focus_for((payload or {}).get("skill", ""), (payload or {}).get("level", ""))
     if not focus:
         raise HTTPException(400, "unknown skill or level")
 
@@ -389,8 +383,8 @@ def syllabus_freeze(payload: dict | None = None) -> dict:
         raise HTTPException(502, "el modelo no devolvió ningún punto")
 
     stored = syllabus_store.save(
-        skill, level, built["points"], built["drafts"],
-        datetime.now().isoformat(timespec="seconds"))
+        skill, level, built["points"], built["drafts"], datetime.now().isoformat(timespec="seconds")
+    )
     return _syllabus_body({**stored, "edited": False})
 
 
@@ -406,8 +400,7 @@ def syllabus_coverage(payload: dict | None = None) -> dict:
     uno saltado aparezca igual, sin cubrir; esa garantía no vale nada si la
     lista la manda quien llama. **No escribe nada.**
     """
-    focus = generate.focus_for(
-        (payload or {}).get("skill", ""), (payload or {}).get("level", ""))
+    focus = generate.focus_for((payload or {}).get("skill", ""), (payload or {}).get("level", ""))
     if not focus:
         raise HTTPException(400, "unknown skill or level")
 
@@ -431,13 +424,12 @@ def syllabus_coverage(payload: dict | None = None) -> dict:
     have: list[str] = []
     for deck in decks:
         topic = deck.split("::")[-1]
-        have += [f"{topic}: {front}"
-                 for front in anki.deck_fronts(deck, limit=per_deck)]
+        have += [f"{topic}: {front}" for front in anki.deck_fronts(deck, limit=per_deck)]
 
     try:
         points = generate.cover(
-            skill, level, stored["points"],
-            [d.split("::")[-1] for d in decks], have)
+            skill, level, stored["points"], [d.split("::")[-1] for d in decks], have
+        )
     except llm.LLMError as e:
         raise HTTPException(502, f"claude -p failed: {e}") from e
 
@@ -445,9 +437,9 @@ def syllabus_coverage(payload: dict | None = None) -> dict:
     # los que se calculó. **Es lo único que esta llamada escribe**, y escribe
     # en su propio archivo: el temario no se toca.
     saved = syllabus_store.save_coverage(
-        skill, level, points, totals, datetime.now().isoformat(timespec="seconds"))
-    return _syllabus_body(stored, points,
-                          {"computed": saved["computed"], "decks": saved["decks"]})
+        skill, level, points, totals, datetime.now().isoformat(timespec="seconds")
+    )
+    return _syllabus_body(stored, points, {"computed": saved["computed"], "decks": saved["decks"]})
 
 
 @app.post("/api/generate/cards")
@@ -472,8 +464,7 @@ def generate_cards(payload: dict) -> dict:
     if len(term) > 80:
         raise HTTPException(400, "term too long")
 
-    focus = generate.focus_for(
-        payload.get("skill", ""), payload.get("level", ""))
+    focus = generate.focus_for(payload.get("skill", ""), payload.get("level", ""))
 
     try:
         return generate.propose_cards(term, _catalog(), focus=focus)
@@ -518,20 +509,24 @@ def add_notes(payload: dict) -> dict:
         if not front or not back:
             raise HTTPException(400, "a card needs both a front and a back")
         deck = _clean_deck_name(card.get("deck"))
-        by_deck.setdefault(deck, []).append({
-            "model": generate.MODEL_NAME,
-            "tags": ["claude-fluent"],
-            # The client sends plain text; Anki stores HTML.
-            "fields": {
-                "Front": anki.to_field_html(front),
-                "Back": anki.to_field_html(back),
-                "Ejemplo": anki.to_field_html(str(card.get("example", "")).strip()),
-            },
-        })
+        by_deck.setdefault(deck, []).append(
+            {
+                "model": generate.MODEL_NAME,
+                "tags": ["claude-fluent"],
+                # The client sends plain text; Anki stores HTML.
+                "fields": {
+                    "Front": anki.to_field_html(front),
+                    "Back": anki.to_field_html(back),
+                    "Ejemplo": anki.to_field_html(str(card.get("example", "")).strip()),
+                },
+            }
+        )
 
     model_record = snapshot.ensure_model(
-        generate.MODEL_NAME, generate.MODEL_FIELDS,
-        generate.MODEL_TEMPLATES, generate.MODEL_CSS,
+        generate.MODEL_NAME,
+        generate.MODEL_FIELDS,
+        generate.MODEL_TEMPLATES,
+        generate.MODEL_CSS,
     )
 
     written = []
@@ -541,14 +536,16 @@ def add_notes(payload: dict) -> dict:
         # the call that wrote it: addNotes once returned eight ids for notes
         # that were gone a minute later.
         alive = [n for n in anki.call("notesInfo", notes=ids) if n] if ids else []
-        written.append({
-            "deck": deck,
-            "asked": len(notes),
-            "created": len(ids),
-            "verified": len(alive),
-            "refused": refused,
-            "record": str(record),
-        })
+        written.append(
+            {
+                "deck": deck,
+                "asked": len(notes),
+                "created": len(ids),
+                "verified": len(alive),
+                "refused": refused,
+                "record": str(record),
+            }
+        )
 
     return {
         "ok": True,
@@ -709,7 +706,8 @@ def practice_turn(payload: dict) -> dict:
     if retry is None:
         if len(session["turns"]) >= practice.MAX_TURNS:
             raise HTTPException(
-                409, f"esta sesión ya llegó a {practice.MAX_TURNS} turnos: cerrala y analizala")
+                409, f"esta sesión ya llegó a {practice.MAX_TURNS} turnos: cerrala y analizala"
+            )
         turn = practice.append_turn(session, text)
     else:
         try:
@@ -717,8 +715,9 @@ def practice_turn(payload: dict) -> dict:
         except (TypeError, ValueError, IndexError) as e:
             raise HTTPException(400, f"no se puede reintentar ese turno: {e}") from e
     try:
-        answer = coach.turn(session["topic"], session["level"],
-                            session["turns"][:turn["index"]], text)
+        answer = coach.turn(
+            session["topic"], session["level"], session["turns"][: turn["index"]], text
+        )
     except llm.LLMError as e:
         # El turno queda visible y reintentable: cuesta ese turno y nada más.
         practice.finish_turn(session, turn["index"], None, str(e))
@@ -745,8 +744,7 @@ def practice_close(payload: dict) -> dict:
     analysis_result = None
     if done:
         try:
-            analysis_result = coach.close(session["topic"], session["level"],
-                                          session["turns"])
+            analysis_result = coach.close(session["topic"], session["level"], session["turns"])
         except llm.LLMError as e:
             raise HTTPException(502, f"claude -p failed: {e}") from e
 
@@ -758,8 +756,12 @@ def practice_close(payload: dict) -> dict:
     if analysis_result is None:
         return {"session": session, "counted": [], "ready": []}
 
-    stored = practice.count(practice.read_patterns(), analysis_result["areas"],
-                            analysis_result["unmatched"], session["id"])
+    stored = practice.count(
+        practice.read_patterns(),
+        analysis_result["areas"],
+        analysis_result["unmatched"],
+        session["id"],
+    )
     practice.write_patterns(stored)
 
     counted = {a["pattern"] for a in analysis_result["areas"] if a["pattern"]}
@@ -791,16 +793,17 @@ def practice_mark(payload: dict) -> dict:
     Sin esto la fila te reclama la misma tarjeta para siempre.
     """
     try:
-        stored = practice.mark(practice.read_patterns(),
-                               str(payload.get("key", "")),
-                               str(payload.get("action", "")),
-                               practice.stamp())
+        stored = practice.mark(
+            practice.read_patterns(),
+            str(payload.get("key", "")),
+            str(payload.get("action", "")),
+            practice.stamp(),
+        )
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
 
     practice.write_patterns(stored)
-    return {"patterns": practice.listing(stored),
-            "threshold": practice.PATTERN_THRESHOLD}
+    return {"patterns": practice.listing(stored), "threshold": practice.PATTERN_THRESHOLD}
 
 
 # Must go last: mounted at the root, it swallows the /api routes above it.

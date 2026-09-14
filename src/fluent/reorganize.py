@@ -17,6 +17,7 @@ Se arregla en las opciones del mazo, dentro de Anki.
 La maestría no se toca. `PLN in Action` no es inglés y contarlo como tal es
 exactamente lo que ensucia la racha, el calendario y el ranking de atascos.
 """
+
 import argparse
 import sys
 
@@ -28,16 +29,16 @@ PLAN = [
         "target": "Reading::A1::Mil palabras",
         "sources": ["Refold Inglés-mil", "ingles poli"],
         "why": "El Refold 1K: la palabra, su definición y una frase de ejemplo. "
-               "`ingles poli` son seis tarjetas del mismo mazo — mismo note "
-               "type, mismos índices de ordenación — así que vuelven con las "
-               "otras 994.",
+        "`ingles poli` son seis tarjetas del mismo mazo — mismo note "
+        "type, mismos índices de ordenación — así que vuelven con las "
+        "otras 994.",
     },
     {
         "target": "Grammar::A2::Gramática en contexto",
         "sources": ["EN — Gramática en contexto (A2→B1)"],
         "why": "Traducir, corregir y completar sobre presente simple vs "
-               "continuo y modales. El mazo ya se llamaba A2→B1; A2 es donde "
-               "cae lo que hay dentro.",
+        "continuo y modales. El mazo ya se llamaba A2→B1; A2 es donde "
+        "cae lo que hay dentro.",
     },
     {
         "target": "Reading::B2::Vocabulario técnico Odoo",
@@ -47,14 +48,14 @@ PLAN = [
             "vocabulario",
         ],
         "why": "Los tres son términos ES→EN con una frase de uso: "
-               "reordering rule, computed field, workflow automation. "
-               "`vocabulario` trae además alguna respuesta de entrevista.",
+        "reordering rule, computed field, workflow automation. "
+        "`vocabulario` trae además alguna respuesta de entrevista.",
     },
     {
         "target": "Speaking::B2::Entrevista Odoo",
         "sources": ["Odoo Interview — English (DRI Systems prep)"],
         "why": "Preguntas de entrevista con la respuesta hablada entera. Se "
-               "practican diciéndolas, no leyéndolas.",
+        "practican diciéndolas, no leyéndolas.",
     },
     {
         "target": "Speaking::B2::Presentación y defensa",
@@ -64,8 +65,8 @@ PLAN = [
             "DRI Code Review — Presentación (texto completo, inglés fácil)",
         ],
         "why": "Frases para presentar, el guion completo y las respuestas a "
-               "las objeciones del revisor. Es una sola actuación en tres "
-               "partes.",
+        "las objeciones del revisor. Es una sola actuación en tres "
+        "partes.",
     },
 ]
 
@@ -84,14 +85,14 @@ def cards_of(deck: str) -> list[int]:
     found = anki.call("findCards", query=f'deck:"{anki._escape_search(deck)}"')
     if not found:
         return []
-    return [c["cardId"] for c in anki.call("cardsInfo", cards=found)
-            if c["deckName"] == deck]
+    return [c["cardId"] for c in anki.call("cardsInfo", cards=found) if c["deckName"] == deck]
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--yes", action="store_true",
-                        help="escribir de verdad; sin esto sólo cuenta")
+    parser.add_argument(
+        "--yes", action="store_true", help="escribir de verdad; sin esto sólo cuenta"
+    )
     args = parser.parse_args()
 
     if not anki.is_alive():
@@ -131,8 +132,7 @@ def main() -> int:
     print(f"\n{UNTOUCHED} no se toca: no es inglés.")
 
     if not args.yes:
-        print(f"\nEnsayo: {total} tarjetas se moverían. "
-              f"Volvé a correrlo con --yes para escribir.")
+        print(f"\nEnsayo: {total} tarjetas se moverían. Volvé a correrlo con --yes para escribir.")
         return 0
 
     print(f"\nListo: {total} tarjetas movidas.")

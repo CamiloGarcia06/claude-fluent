@@ -21,6 +21,7 @@ cola, ni fecha de próximo repaso, ni nada que decida cuándo estudiás. Es un
 diagnóstico con un disparador, y lo que dispara es abrir `#/agregar`. Anki
 sigue siendo dueño de cada repaso.
 """
+
 import json
 import os
 import re
@@ -67,13 +68,13 @@ def path_for(session_id: str) -> Path:
 def _write(path: Path, payload: dict) -> dict:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".json.part")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2),
-                   encoding="utf-8")
-    os.replace(tmp, path)   # un corte a mitad de escritura no deja basura
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp, path)  # un corte a mitad de escritura no deja basura
     return payload
 
 
 # ── Sesiones ──────────────────────────────────────────────────────────────
+
 
 def new_session(topic: str, level: str) -> dict:
     """Abrir una sesión nueva, sin pisar ninguna.
@@ -88,17 +89,20 @@ def new_session(topic: str, level: str) -> dict:
     while path_for(now.strftime("%Y%m%d-%H%M%S")).exists():
         now += timedelta(seconds=1)
 
-    return _write(path_for(now.strftime("%Y%m%d-%H%M%S")), {
-        "id": now.strftime("%Y%m%d-%H%M%S"),
-        "started": now.isoformat(timespec="seconds"),
-        "topic": topic,
-        "level": level,
-        "closed": False,
-        "closed_at": None,
-        "abandoned": False,
-        "turns": [],
-        "analysis": None,
-    })
+    return _write(
+        path_for(now.strftime("%Y%m%d-%H%M%S")),
+        {
+            "id": now.strftime("%Y%m%d-%H%M%S"),
+            "started": now.isoformat(timespec="seconds"),
+            "topic": topic,
+            "level": level,
+            "closed": False,
+            "closed_at": None,
+            "abandoned": False,
+            "turns": [],
+            "analysis": None,
+        },
+    )
 
 
 def load(session_id: str) -> dict | None:
@@ -124,19 +128,20 @@ def load(session_id: str) -> dict | None:
         except (KeyError, TypeError, ValueError):
             continue
         state = item.get("state")
-        turns.append({
-            "index": index,
-            "at": item.get("at"),
-            "text": str(item["text"]),
-            "state": state if state in ("pending", "done", "failed") else "failed",
-            "reply": str(item.get("reply", "")),
-            "question": str(item.get("question", "")),
-            "alternative": str(item.get("alternative", "")),
-            "corrections": [c for c in item.get("corrections", [])
-                            if isinstance(c, dict)],
-            "error": str(item.get("error", "")),
-            "duration_ms": item.get("duration_ms"),
-        })
+        turns.append(
+            {
+                "index": index,
+                "at": item.get("at"),
+                "text": str(item["text"]),
+                "state": state if state in ("pending", "done", "failed") else "failed",
+                "reply": str(item.get("reply", "")),
+                "question": str(item.get("question", "")),
+                "alternative": str(item.get("alternative", "")),
+                "corrections": [c for c in item.get("corrections", []) if isinstance(c, dict)],
+                "error": str(item.get("error", "")),
+                "duration_ms": item.get("duration_ms"),
+            }
+        )
     turns.sort(key=lambda t: t["index"])
 
     return {
@@ -227,8 +232,12 @@ def append_turn(session: dict, text: str) -> dict:
         "at": datetime.now().isoformat(timespec="seconds"),
         "text": text,
         "state": "pending",
-        "reply": "", "question": "", "alternative": "",
-        "corrections": [], "error": "", "duration_ms": None,
+        "reply": "",
+        "question": "",
+        "alternative": "",
+        "corrections": [],
+        "error": "",
+        "duration_ms": None,
     }
     session["turns"].append(turn)
     save(session)
@@ -245,29 +254,41 @@ def retry_turn(session: dict, index: int, text: str) -> dict:
     turn = session["turns"][index]
     if turn["state"] == "done":
         raise ValueError("ese turno ya está respondido")
-    turn.update(text=text, state="pending", reply="", question="",
-                alternative="", corrections=[], error="", duration_ms=None)
+    turn.update(
+        text=text,
+        state="pending",
+        reply="",
+        question="",
+        alternative="",
+        corrections=[],
+        error="",
+        duration_ms=None,
+    )
     save(session)
     return turn
 
 
-def finish_turn(session: dict, index: int, answer: dict | None,
-                error: str = "") -> dict:
+def finish_turn(session: dict, index: int, answer: dict | None, error: str = "") -> dict:
     """Reescribir ese mismo índice con lo que aterrizó, o con el fallo."""
     turn = session["turns"][index]
     if answer is None:
         turn["state"] = "failed"
         turn["error"] = error
     else:
-        turn.update(state="done", error="", **{
-            k: answer[k] for k in
-            ("reply", "question", "alternative", "corrections", "duration_ms")
-        })
+        turn.update(
+            state="done",
+            error="",
+            **{
+                k: answer[k]
+                for k in ("reply", "question", "alternative", "corrections", "duration_ms")
+            },
+        )
     save(session)
     return turn
 
 
 # ── Patrones ──────────────────────────────────────────────────────────────
+
 
 def _empty() -> dict:
     return {"patterns": {}, "unmatched": {}}
@@ -294,15 +315,18 @@ def read_patterns() -> dict:
         # Sólo ids de sesión, y todos con la misma forma: `cleared` se compara
         # con estas cadenas, y una fecha ISO mezclada acá ordenaría antes que
         # cualquier id (`-` viene antes que un dígito) y limpiaría de más.
-        sessions = [s for s in item.get("sessions", [])
-                    if isinstance(s, str) and _ID.fullmatch(s)]
+        sessions = [s for s in item.get("sessions", []) if isinstance(s, str) and _ID.fullmatch(s)]
         if not sessions:
             continue
         examples = []
         for example in item.get("examples", []):
             if isinstance(example, dict) and example.get("wrong"):
-                examples.append({"wrong": str(example["wrong"])[:200],
-                                 "right": str(example.get("right", ""))[:200]})
+                examples.append(
+                    {
+                        "wrong": str(example["wrong"])[:200],
+                        "right": str(example.get("right", ""))[:200],
+                    }
+                )
             elif isinstance(example, str) and example.strip():
                 # Formato viejo: sólo el error, sin su par. Se conserva para no
                 # perder el conteo de un archivo anterior a este cambio.
@@ -310,19 +334,22 @@ def read_patterns() -> dict:
         patterns[key] = {
             "sessions": sorted(set(sessions)),
             "occurrences": item.get("occurrences")
-                if isinstance(item.get("occurrences"), int) else len(sessions),
+            if isinstance(item.get("occurrences"), int)
+            else len(sessions),
             "examples": examples[:MAX_EXAMPLES],
             "cleared": item.get("cleared") if isinstance(item.get("cleared"), str) else None,
             "carded": item.get("carded") if isinstance(item.get("carded"), str) else None,
         }
 
-    unmatched = {k: v for k, v in (stored.get("unmatched") or {}).items()
-                 if isinstance(k, str) and isinstance(v, int)}
+    unmatched = {
+        k: v
+        for k, v in (stored.get("unmatched") or {}).items()
+        if isinstance(k, str) and isinstance(v, int)
+    }
     return {"patterns": patterns, "unmatched": unmatched}
 
 
-def count(stored: dict, areas: list[dict], unmatched: list[str],
-          session_id: str) -> dict:
+def count(stored: dict, areas: list[dict], unmatched: list[str], session_id: str) -> dict:
     """Sumar un cierre al conteo. Pura: recibe lo guardado, devuelve lo nuevo.
 
     Un patrón sube **como máximo uno por sesión**, aunque el mismo hábito
@@ -340,8 +367,8 @@ def count(stored: dict, areas: list[dict], unmatched: list[str],
         if not key or key not in coach.PATTERN_BY_KEY:
             continue
         entry = patterns.setdefault(
-            key, {"sessions": [], "occurrences": 0, "examples": [],
-                  "cleared": None, "carded": None})
+            key, {"sessions": [], "occurrences": 0, "examples": [], "cleared": None, "carded": None}
+        )
         entry["sessions"] = sorted(set(entry["sessions"]) | {session_id})
         entry["occurrences"] += max(len(area.get("examples", [])), 1)
         # El par entero, no sólo el error: cuando este patrón se vuelva tarjeta,
@@ -352,8 +379,7 @@ def count(stored: dict, areas: list[dict], unmatched: list[str],
         for case in area.get("examples", []):
             wrong = case.get("wrong", "")
             if wrong and wrong not in have and len(entry["examples"]) < MAX_EXAMPLES:
-                entry["examples"].append(
-                    {"wrong": wrong, "right": case.get("right", "")})
+                entry["examples"].append({"wrong": wrong, "right": case.get("right", "")})
                 have.add(wrong)
 
     misses = dict(stored.get("unmatched", {}))
@@ -388,20 +414,22 @@ def listing(stored: dict) -> list[dict]:
     for key, entry in stored.get("patterns", {}).items():
         spec = coach.PATTERN_BY_KEY[key]
         n = _count_of(entry)
-        rows.append({
-            "key": key,
-            "label": spec["label"],
-            "category": spec["category"],
-            "skill": spec["skill"],
-            "level": spec["level"],
-            "seed": spec["seed"],
-            "count": n,
-            "occurrences": entry["occurrences"],
-            "last_seen": _day(entry["sessions"][-1]) if entry["sessions"] else None,
-            "examples": entry["examples"],
-            "carded": _day(entry["carded"]) if entry["carded"] else None,
-            "ready": n >= PATTERN_THRESHOLD,
-        })
+        rows.append(
+            {
+                "key": key,
+                "label": spec["label"],
+                "category": spec["category"],
+                "skill": spec["skill"],
+                "level": spec["level"],
+                "seed": spec["seed"],
+                "count": n,
+                "occurrences": entry["occurrences"],
+                "last_seen": _day(entry["sessions"][-1]) if entry["sessions"] else None,
+                "examples": entry["examples"],
+                "carded": _day(entry["carded"]) if entry["carded"] else None,
+                "ready": n >= PATTERN_THRESHOLD,
+            }
+        )
     # Dos pasadas y no una tupla: `count` va de mayor a menor y `last_seen` de
     # más nueva a más vieja, y un `-` no se le puede poner a una fecha ISO. El
     # sort de Python es estable, así que la segunda respeta el orden de la

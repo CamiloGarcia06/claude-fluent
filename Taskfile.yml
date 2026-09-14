@@ -10,7 +10,7 @@ tasks:
   dev:
     desc: servidor local con recarga (http://127.0.0.1:8001; el servicio ocupa el 8000)
     cmds:
-      - uv run uvicorn {{.APP}}.app:app --reload --port 8001
+      - uv run uvicorn {{.APP}}.main:app --reload --port 8001
   fmt:
     cmds:
       - uv run ruff format src tests

@@ -11,6 +11,7 @@ something real to diagnose.
 Writes go through snapshot.py like everything else: creation leaves a record in
 data/snapshots/, and --undo snapshots each note before deleting it.
 """
+
 import sys
 
 from fluent import snapshot
@@ -45,6 +46,7 @@ def main() -> int:
         # stray run costs the review history too. It does not fire on its own.
         if "--yes" not in sys.argv:
             import json
+
             ids = json.loads(latest.read_text())["note_ids"]
             print(f"This would delete {len(ids)} notes listed in {latest.name}.")
             print("Re-run with --yes if that is what you want.")
@@ -54,8 +56,9 @@ def main() -> int:
         return 0
 
     ids, record = snapshot.add_notes(
-        DECK, [{"fields": {"Front": front, "Back": back}, "tags": ["seed"]}
-               for front, back in CARDS])
+        DECK,
+        [{"fields": {"Front": front, "Back": back}, "tags": ["seed"]} for front, back in CARDS],
+    )
     print(f"Created {len(ids)} notes in '{DECK}'")
     print(f"Creation record: {record}")
     print("\nNow review them in Anki and press Otra vez on a few, three times or")

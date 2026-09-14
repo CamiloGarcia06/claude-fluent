@@ -1,4 +1,5 @@
 """`claude -p` wrapper. Runs on the Claude Code subscription: no API key."""
+
 import json
 import shutil
 import subprocess
@@ -23,8 +24,9 @@ class LLMError(RuntimeError):
     pass
 
 
-def generate(prompt: str, schema: dict, timeout: int = TIMEOUT_S,
-             system: str = SYSTEM_PROMPT) -> tuple[dict, int]:
+def generate(
+    prompt: str, schema: dict, timeout: int = TIMEOUT_S, system: str = SYSTEM_PROMPT
+) -> tuple[dict, int]:
     """Return (structured output, duration in ms).
 
     Never uses --bare: that mode ignores the subscription login and demands an
@@ -37,10 +39,15 @@ def generate(prompt: str, schema: dict, timeout: int = TIMEOUT_S,
     try:
         proc = subprocess.run(
             [
-                "claude", "-p", prompt,
-                "--output-format", "json",
-                "--json-schema", json.dumps(schema),
-                "--system-prompt", system,
+                "claude",
+                "-p",
+                prompt,
+                "--output-format",
+                "json",
+                "--json-schema",
+                json.dumps(schema),
+                "--system-prompt",
+                system,
             ],
             capture_output=True,
             text=True,

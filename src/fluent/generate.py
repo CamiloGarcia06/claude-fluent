@@ -11,9 +11,11 @@ the sum of its parts with nothing to show meanwhile, and one bad term poisons
 the whole answer; per term, the screen fills in as each one lands and a failure
 costs that term only.
 """
+
 import re
 
-from fluent import analysis, anki, llm
+from fluent import anki, llm
+from fluent.collection.domain import analysis
 
 # The note type this app writes. Stock Basic has no room for an example
 # sentence, and the example is what makes a vocabulary card usable instead of
@@ -24,12 +26,14 @@ MODEL_FIELDS = ["Front", "Back", "Ejemplo"]
 # One card per note, English -> Spanish. The reverse direction is a different
 # skill and deserves its own deck rather than a second template that doubles
 # every count silently.
-MODEL_TEMPLATES = [{
-    "Name": "Reconocer",
-    "Front": "{{Front}}",
-    "Back": "{{FrontSide}}\n<hr id=answer>\n{{Back}}\n"
-            "{{#Ejemplo}}<div class=\"ejemplo\">{{Ejemplo}}</div>{{/Ejemplo}}",
-}]
+MODEL_TEMPLATES = [
+    {
+        "Name": "Reconocer",
+        "Front": "{{Front}}",
+        "Back": "{{FrontSide}}\n<hr id=answer>\n{{Back}}\n"
+        '{{#Ejemplo}}<div class="ejemplo">{{Ejemplo}}</div>{{/Ejemplo}}',
+    }
+]
 
 # La ficha de cartón, en Anki: papel frío, tinta grafito, sin sombras. La regla
 # impresa separa la pregunta de la respuesta y el ejemplo va en gris, un paso
@@ -133,15 +137,15 @@ SYLLABUS_DRAFTS = 3
 # "artículos a/an/the" y "plural de los sustantivos", que es el temario de
 # Grammar con otro nombre encima.
 SYLLABUS_POINT = {
-    "Grammar": "a structure or rule — \"artículos a/an/the\", \"there is / there are\"",
+    "Grammar": 'a structure or rule — "artículos a/an/the", "there is / there are"',
     "Writing": "a kind of text they can produce, or a device it needs — "
-               "\"un email corto de trabajo\", \"conectores de adición\"",
+    '"un email corto de trabajo", "conectores de adición"',
     "Speaking": "a situation they can handle, or the function it needs — "
-                "\"presentarse en una reunión\", \"pedir que repitan\"",
+    '"presentarse en una reunión", "pedir que repitan"',
     "Listening": "what they can follow and under what conditions — "
-                 "\"instrucciones cortas cara a cara\", \"números y horas\"",
+    '"instrucciones cortas cara a cara", "números y horas"',
     "Reading": "a kind of text they can read, or the vocabulary field it needs — "
-               "\"señales y carteles\", \"vocabulario de oficina\"",
+    '"señales y carteles", "vocabulario de oficina"',
 }
 
 DRAFT_SCHEMA = {
@@ -274,7 +278,6 @@ Rules:
   only proposes work they can decline."""
 
 
-
 CARDS_PROMPT = """A Spanish speaker learning English wants cards for one term.
 
 Term: {term}
@@ -362,11 +365,10 @@ def _levels_block(catalog: dict) -> str:
             if level["total"] == 0:
                 marks.append(f"{level['level']}: hole")
             else:
-                marks.append(
-                    f"{level['level']}: {level['mature']}/{level['total']} mature"
-                )
-        lines.append(f"  {skill['skill']} (standing on {skill['current_level']}): "
-                     + ", ".join(marks))
+                marks.append(f"{level['level']}: {level['mature']}/{level['total']} mature")
+        lines.append(
+            f"  {skill['skill']} (standing on {skill['current_level']}): " + ", ".join(marks)
+        )
     return "\n".join(lines)
 
 
@@ -432,9 +434,9 @@ def _focus_block(focus: dict | None, have: list[str]) -> str:
     if not focus:
         return ""
     if have:
-        return FOCUS_ENRICH.format(
-            **focus, have="\n".join(f"  {front}" for front in have))
+        return FOCUS_ENRICH.format(**focus, have="\n".join(f"  {front}" for front in have))
     return FOCUS_HOLE.format(**focus)
+
 
 TERMS_PROMPT = """A Spanish speaker is learning English with Anki. Read the
 state of their collection and say what is worth making cards for next.
@@ -464,10 +466,13 @@ If there is genuinely nothing to go on — no failures and no holes — return a
 empty list rather than inventing work."""
 
 
-
-def propose_terms(stuck: list[dict], catalog: dict,
-                  focus: dict | None = None, topic: str = "",
-                  have: list[str] | None = None) -> dict:
+def propose_terms(
+    stuck: list[dict],
+    catalog: dict,
+    focus: dict | None = None,
+    topic: str = "",
+    have: list[str] | None = None,
+) -> dict:
     """What to make cards for next.
 
     Three ways in, and the box decides which: with a subject written in it, the
@@ -511,7 +516,8 @@ def draft_syllabus(skill: str, level: str) -> list[dict]:
     """One draft of what a level is made of. Reads nothing of the collection."""
     result, _ = llm.generate(
         DRAFT_PROMPT.format(
-            skill=skill, level=level,
+            skill=skill,
+            level=level,
             point_is=SYLLABUS_POINT.get(skill, "one teachable thing"),
             max_points=MAX_SYLLABUS_POINTS,
         ),
@@ -540,7 +546,10 @@ def merge_drafts(skill: str, level: str, drafts: list[list[dict]]) -> list[dict]
     )
     result, _ = llm.generate(
         MERGE_PROMPT.format(
-            count=len(drafts), skill=skill, level=level, drafts=blocks,
+            count=len(drafts),
+            skill=skill,
+            level=level,
+            drafts=blocks,
             max_points=MAX_SYLLABUS_POINTS,
         ),
         MERGE_SCHEMA,
@@ -559,11 +568,13 @@ def merge_drafts(skill: str, level: str, drafts: list[list[dict]]) -> list[dict]
             agreed = int(item.get("drafts", 1))
         except (TypeError, ValueError):
             agreed = 1
-        points.append({
-            "point": name,
-            "english": _clean(item.get("english"), 80),
-            "drafts": max(1, min(len(drafts), agreed)),
-        })
+        points.append(
+            {
+                "point": name,
+                "english": _clean(item.get("english"), 80),
+                "drafts": max(1, min(len(drafts), agreed)),
+            }
+        )
     return points
 
 
@@ -579,14 +590,17 @@ def build_syllabus(skill: str, level: str, drafts: int = SYLLABUS_DRAFTS) -> dic
     if not sampled:
         return {"points": [], "drafts": 0}
 
-    points = merge_drafts(skill, level, sampled) if len(sampled) > 1 else [
-        {**p, "drafts": 1} for p in sampled[0]
-    ]
+    points = (
+        merge_drafts(skill, level, sampled)
+        if len(sampled) > 1
+        else [{**p, "drafts": 1} for p in sampled[0]]
+    )
     return {"points": points, "drafts": len(sampled)}
 
 
-def cover(skill: str, level: str, points: list[dict],
-          topics: list[str], have: list[str] | None = None) -> list[dict]:
+def cover(
+    skill: str, level: str, points: list[dict], topics: list[str], have: list[str] | None = None
+) -> list[dict]:
     """The frozen points, each with the deck that covers it — or nothing.
 
     This is the half that genuinely belongs derived: it is a fact about the
@@ -597,11 +611,12 @@ def cover(skill: str, level: str, points: list[dict],
 
     result, _ = llm.generate(
         COVERAGE_PROMPT.format(
-            skill=skill, level=level,
+            skill=skill,
+            level=level,
             points="\n".join(f"  {p['point']}" for p in points),
             topics="\n".join(f"  {t}" for t in topics) or "  (none yet)",
             have="\n".join(f"  {line}" for line in (have or []))
-                 or "  (this level holds no cards at all)",
+            or "  (this level holds no cards at all)",
         ),
         COVERAGE_SCHEMA,
     )
@@ -609,8 +624,7 @@ def cover(skill: str, level: str, points: list[dict],
     # El modelo devuelve el temario tal como se lo dieron, así que su respuesta
     # se indexa por nombre y se recorre la lista congelada: si inventó un punto
     # queda fuera, y si se saltó uno igual aparece, sin cubrir.
-    verdicts = {_clean(item.get("point"), 80).lower(): item
-                for item in result.get("points", [])}
+    verdicts = {_clean(item.get("point"), 80).lower(): item for item in result.get("points", [])}
     known = {t.lower(): t for t in topics}
 
     covered = []
@@ -622,11 +636,13 @@ def cover(skill: str, level: str, points: list[dict],
         # el lado seguro del error — un hueco de más propone trabajo que se
         # puede rechazar, uno de menos lo esconde.
         claimed = _clean(verdict.get("covered_by"), 120).lower()
-        covered.append({
-            **point,
-            "covered_by": known.get(claimed, ""),
-            "note": _clean(verdict.get("note"), 200),
-        })
+        covered.append(
+            {
+                **point,
+                "covered_by": known.get(claimed, ""),
+                "note": _clean(verdict.get("note"), 200),
+            }
+        )
     return covered
 
 
@@ -635,6 +651,7 @@ def cover(skill: str, level: str, points: list[dict],
 # Anki, so nothing here is used as it arrives: the skill and the level must be
 # ones this app knows, and the topic is scrubbed of the separator that would
 # otherwise let a topic invent a level of its own.
+
 
 def _canonical(value: str, allowed: tuple[str, ...]) -> str | None:
     value = str(value or "").strip()
@@ -646,7 +663,7 @@ def _canonical(value: str, allowed: tuple[str, ...]) -> str | None:
 
 def _clean_topic(value: str) -> str:
     topic = re.sub(r"\s+", " ", str(value or "")).strip(" :")
-    topic = topic.replace("::", " ")   # "::" is the level separator, not text
+    topic = topic.replace("::", " ")  # "::" is the level separator, not text
     return topic[:60]
 
 
@@ -677,8 +694,7 @@ def focus_for(skill: str, level: str) -> dict | None:
     return None
 
 
-def propose_cards(term: str, catalog: dict, count: int = 3,
-                  focus: dict | None = None) -> dict:
+def propose_cards(term: str, catalog: dict, count: int = 3, focus: dict | None = None) -> dict:
     """Candidate cards for one term, plus the deck they belong in.
 
     With a `focus` — you came from a hole or from a point of some level's
@@ -701,8 +717,7 @@ def propose_cards(term: str, catalog: dict, count: int = 3,
         CARDS_SCHEMA,
     )
 
-    proposed = deck_for(result.get("skill"), result.get("level"),
-                        result.get("topic"))
+    proposed = deck_for(result.get("skill"), result.get("level"), result.get("topic"))
     deck = proposed
     rationale = str(result.get("deck_rationale", "")).strip()
     if focus:
@@ -710,9 +725,11 @@ def propose_cards(term: str, catalog: dict, count: int = 3,
         # Y se dice. Que el mazo no sea el que el modelo razonó y que la frase
         # de abajo siga explicando otro es cómo una pantalla miente sin querer.
         if proposed and deck and proposed != deck:
-            rationale = (f"Va a {focus['skill']} {focus['level']} porque lo "
-                         f"pediste desde ahí; el modelo lo habría puesto en "
-                         f"{proposed.rsplit('::', 1)[0].replace('::', ' ')}.")
+            rationale = (
+                f"Va a {focus['skill']} {focus['level']} porque lo "
+                f"pediste desde ahí; el modelo lo habría puesto en "
+                f"{proposed.rsplit('::', 1)[0].replace('::', ' ')}."
+            )
     existing = set(
         d["deck"]
         for skill in catalog["skills"]
@@ -725,18 +742,20 @@ def propose_cards(term: str, catalog: dict, count: int = 3,
         front = anki.to_plain_text(str(item.get("front", ""))).strip()
         back = anki.to_plain_text(str(item.get("back", ""))).strip()
         if not front or not back:
-            continue   # a card missing either side is not a card
+            continue  # a card missing either side is not a card
 
         # "Ya la tenés": the same front already in the collection, in any note
         # type. Offered, never hidden — seeing that you own it is the point.
         duplicates = anki.existing_with_front(front)
-        candidates.append({
-            "front": front,
-            "back": back,
-            "example": anki.to_plain_text(str(item.get("example", ""))).strip(),
-            "label": anki.to_plain_text(str(item.get("label", ""))).strip(),
-            "duplicate_in": duplicates[0]["deck"] if duplicates else None,
-        })
+        candidates.append(
+            {
+                "front": front,
+                "back": back,
+                "example": anki.to_plain_text(str(item.get("example", ""))).strip(),
+                "label": anki.to_plain_text(str(item.get("label", ""))).strip(),
+                "duplicate_in": duplicates[0]["deck"] if duplicates else None,
+            }
+        )
 
     return {
         "term": term,

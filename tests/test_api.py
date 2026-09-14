@@ -3,7 +3,7 @@
 from fastapi.testclient import TestClient
 
 from fluent import anki, state
-from fluent import app as app_module
+from fluent import main as app_module
 
 
 def client() -> TestClient:

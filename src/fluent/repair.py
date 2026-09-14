@@ -2,6 +2,7 @@
 
 Proposes only. Nothing here writes to the collection — see snapshot.py.
 """
+
 from fluent import anki, llm
 
 # The model returns fields as a list of name/value pairs rather than an object:

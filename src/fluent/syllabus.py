@@ -22,6 +22,7 @@ decidía y vos no opinabas. Estos archivos son texto plano a propósito: borrá 
 punto que no te interesa, agregá el que tu trabajo necesita, reordenalos. Nada
 los reescribe salvo que pidas regenerar.
 """
+
 import json
 import os
 import re
@@ -96,11 +97,13 @@ def load(skill: str, level: str) -> dict | None:
         name = " ".join(str(item.get("point", "")).split())[:80]
         if not name:
             continue
-        points.append({
-            "point": name,
-            "english": " ".join(str(item.get("english", "")).split())[:80],
-            "drafts": item.get("drafts"),
-        })
+        points.append(
+            {
+                "point": name,
+                "english": " ".join(str(item.get("english", "")).split())[:80],
+                "drafts": item.get("drafts"),
+            }
+        )
     if not points:
         return None
 
@@ -125,7 +128,7 @@ def _edited_after(path: Path, generated: str | None) -> bool:
         return False
     try:
         written = datetime.fromisoformat(generated).timestamp()
-        return path.stat().st_mtime > written + 2   # margen para el propio write
+        return path.stat().st_mtime > written + 2  # margen para el propio write
     except (ValueError, OSError):
         return False
 
@@ -169,8 +172,7 @@ def unreadable() -> list[str]:
     return bad
 
 
-def save(skill: str, level: str, points: list[dict], drafts: int,
-         generated: str) -> dict:
+def save(skill: str, level: str, points: list[dict], drafts: int, generated: str) -> dict:
     """Congelar el temario de un nivel. Sobrescribe si ya había uno."""
     path = path_for(skill, level)
     payload = {
@@ -181,8 +183,7 @@ def save(skill: str, level: str, points: list[dict], drafts: int,
         # Sin `covered_by`: la cobertura se deriva en cada lectura y guardarla
         # sería exactamente la copia que se desincroniza.
         "points": [
-            {"point": p["point"], "english": p.get("english", ""),
-             "drafts": p.get("drafts")}
+            {"point": p["point"], "english": p.get("english", ""), "drafts": p.get("drafts")}
             for p in points
         ],
     }
@@ -199,12 +200,11 @@ def save(skill: str, level: str, points: list[dict], drafts: int,
         try:
             shutil.copy2(path, path.with_suffix(".json.bak"))
         except OSError:
-            pass   # una copia que no se pudo hacer no puede impedir el guardado
+            pass  # una copia que no se pudo hacer no puede impedir el guardado
 
     tmp = path.with_suffix(".json.part")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2),
-                   encoding="utf-8")
-    os.replace(tmp, path)   # un corte a mitad de escritura no deja basura
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp, path)  # un corte a mitad de escritura no deja basura
     return payload
 
 
@@ -235,8 +235,7 @@ def load_coverage(skill: str, level: str, points: list[dict]) -> dict | None:
     del error acá es no tener respuesta, igual que en `cover()`.
     """
     try:
-        stored = json.loads(
-            coverage_path_for(skill, level).read_text(encoding="utf-8"))
+        stored = json.loads(coverage_path_for(skill, level).read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError, ValueError, OSError):
         return None
     if not isinstance(stored, dict):
@@ -251,20 +250,21 @@ def load_coverage(skill: str, level: str, points: list[dict]) -> dict | None:
 
     return {
         "computed": stored.get("computed"),
-        "decks": {str(k): int(v) for k, v in decks.items()
-                  if isinstance(v, (int, float))},
+        "decks": {str(k): int(v) for k, v in decks.items() if isinstance(v, (int, float))},
         "by_point": {
             name: {
                 "covered_by": str((entry or {}).get("covered_by", ""))[:120],
                 "note": str((entry or {}).get("note", ""))[:200],
             }
-            for name, entry in by_point.items() if isinstance(entry, dict)
+            for name, entry in by_point.items()
+            if isinstance(entry, dict)
         },
     }
 
 
-def save_coverage(skill: str, level: str, points: list[dict],
-                  decks: dict[str, int], computed: str) -> dict:
+def save_coverage(
+    skill: str, level: str, points: list[dict], decks: dict[str, int], computed: str
+) -> dict:
     """Guardar lo que acaba de costar medio minuto, con su fecha y sus mazos."""
     payload = {
         "skill": skill,
@@ -277,8 +277,7 @@ def save_coverage(skill: str, level: str, points: list[dict],
         # sea barata.
         "decks": {str(name): int(total) for name, total in decks.items()},
         "by_point": {
-            p["point"]: {"covered_by": p.get("covered_by", ""),
-                         "note": p.get("note", "")}
+            p["point"]: {"covered_by": p.get("covered_by", ""), "note": p.get("note", "")}
             for p in points
         },
     }
@@ -286,8 +285,7 @@ def save_coverage(skill: str, level: str, points: list[dict],
     path = coverage_path_for(skill, level)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".json.part")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2),
-                   encoding="utf-8")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     os.replace(tmp, path)
     return payload
 

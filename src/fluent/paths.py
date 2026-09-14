@@ -4,6 +4,7 @@ El paquete está en `src/fluent/`; `data/` (estado, temarios, snapshots, sesione
 y `static/` siguen en la raíz del repo, que es donde siempre estuvieron.
 FLUENT_ROOT permite apuntar a otra raíz (los tests lo usan para no tocar tus datos).
 """
+
 import os
 from pathlib import Path
 

@@ -16,6 +16,7 @@ Three kinds of record live in data/snapshots/, one per kind of write:
     move-*.json        a move — the deck every card came from, before a rename
                        or a merge sent it somewhere else
 """
+
 import json
 import os
 from datetime import datetime
@@ -95,16 +96,24 @@ def update_note_fields(note_id: int, fields: dict[str, str]) -> Path:
 # take a snapshot; additive writes leave a creation record. Both go through
 # this module, and nothing reaches Anki any other way.
 
+
 def _write_creation_record(deck: str, ids: list[int], refused: list[dict]) -> Path:
     SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
     path = SNAPSHOT_DIR / f"created-{_stamp()}.json"
-    path.write_text(json.dumps({
-        "created_at": datetime.now().isoformat(timespec="seconds"),
-        "kind": "creation",
-        "deck": deck,
-        "note_ids": ids,
-        "refused": refused,
-    }, ensure_ascii=False, indent=2), encoding="utf-8")
+    path.write_text(
+        json.dumps(
+            {
+                "created_at": datetime.now().isoformat(timespec="seconds"),
+                "kind": "creation",
+                "deck": deck,
+                "note_ids": ids,
+                "refused": refused,
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     return path
 
 
@@ -146,8 +155,12 @@ def add_notes(deck: str, notes: list[dict]) -> tuple[list[int], Path, list[dict]
             if check.get("canAdd"):
                 writable.append(note)
             else:
-                refused.append({"front": anki.to_plain_text(front),
-                                "error": check.get("error", "Anki lo rechazó")})
+                refused.append(
+                    {
+                        "front": anki.to_plain_text(front),
+                        "error": check.get("error", "Anki lo rechazó"),
+                    }
+                )
 
         # What existed before, so a failure can still be told from a success:
         # the exception takes the ids with it, and a note without a record is
@@ -177,8 +190,8 @@ def add_notes(deck: str, notes: list[dict]) -> tuple[list[int], Path, list[dict]
 # reproduce or repair it by hand. It is written before the call, so a model
 # that exists in Anki always has a file describing it here.
 
-def ensure_model(name: str, fields: list[str], templates: list[dict],
-                 css: str) -> Path | None:
+
+def ensure_model(name: str, fields: list[str], templates: list[dict], css: str) -> Path | None:
     """Create the note type if it is missing. Returns the record, or None when
     it already existed and nothing was written."""
     if anki.model_exists(name):
@@ -186,16 +199,23 @@ def ensure_model(name: str, fields: list[str], templates: list[dict],
 
     SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
     path = SNAPSHOT_DIR / f"model-{_stamp()}.json"
-    path.write_text(json.dumps({
-        "created_at": datetime.now().isoformat(timespec="seconds"),
-        "kind": "model",
-        "model": name,
-        "fields": fields,
-        "templates": templates,
-        "css": css,
-        "note": "AnkiConnect cannot delete a note type; remove it from Anki's "
+    path.write_text(
+        json.dumps(
+            {
+                "created_at": datetime.now().isoformat(timespec="seconds"),
+                "kind": "model",
+                "model": name,
+                "fields": fields,
+                "templates": templates,
+                "css": css,
+                "note": "AnkiConnect cannot delete a note type; remove it from Anki's "
                 "own GUI if it was a mistake.",
-    }, ensure_ascii=False, indent=2), encoding="utf-8")
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
 
     with anki.write_unlocked(str(path)):
         anki.call(
@@ -235,27 +255,32 @@ def undo_creation(record_path: Path | str) -> int:
 # into one is the same operation, and the record puts every card back in the
 # deck it came from.
 
+
 def move_cards(card_ids: list[int], target: str) -> Path:
     """Move cards into `target`, recording the deck each one came from."""
     if not card_ids:
         raise ValueError("no cards to move")
 
-    origin = {
-        card["cardId"]: card["deckName"]
-        for card in anki.call("cardsInfo", cards=card_ids)
-    }
+    origin = {card["cardId"]: card["deckName"] for card in anki.call("cardsInfo", cards=card_ids)}
     missing = [c for c in card_ids if c not in origin]
     if missing:
         raise ValueError(f"cards not found in the collection: {missing[:5]}")
 
     SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
     path = SNAPSHOT_DIR / f"move-{_stamp()}.json"
-    path.write_text(json.dumps({
-        "created_at": datetime.now().isoformat(timespec="seconds"),
-        "kind": "move",
-        "target": target,
-        "cards": [{"card": card, "from": origin[card]} for card in card_ids],
-    }, ensure_ascii=False, indent=2), encoding="utf-8")
+    path.write_text(
+        json.dumps(
+            {
+                "created_at": datetime.now().isoformat(timespec="seconds"),
+                "kind": "move",
+                "target": target,
+                "cards": [{"card": card, "from": origin[card]} for card in card_ids],
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
 
     with anki.write_unlocked(str(path)):
         anki.call("createDeck", deck=target)

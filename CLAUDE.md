@@ -5,15 +5,20 @@ plan de la plataforma personal): el paquete ya vive en `src/fluent/` con uv,
 Taskfile y tests de caracterización, pero el código sigue plano. `task hex`
 corre `hexcheck --warn` hasta que existan funcionalidades; cada módulo que se
 mueva a `domain/`, `application/` o `infrastructure/` retira sus excepciones.
-Orden previsto: `analysis.py` (ya es puro) → `anki.py`, `llm.py`, `coach.py` a
-`infrastructure/` → `app.py` a routers por funcionalidad.
+Hecho: la funcionalidad `collection` (el análisis de la colección: `Review`,
+`analysis.py`, casos de uso `BuildToday/Catalog/Stuck`, puerto
+`CollectionReader` y adaptador `AnkiReader` sobre el `anki.py` plano). `app.py`
+pasó a `main.py` (raíz de composición + endpoints aún planos + el traductor
+de errores de dominio). Siguiente: `cards` (generate/repair/snapshot),
+`syllabus`, `practice`; después `anki.py` y `llm.py` a infraestructura y los
+endpoints a routers por funcionalidad.
 
 - `task check` antes de cualquier PR (ruff, pyright básico, pytest, hexcheck).
 - Los tests corren contra una raíz temporal (`FLUENT_ROOT`): nunca tocan `data/`.
 - `data/` y `static/` siguen en la raíz del repo; `src/fluent/paths.py` es el
   único sitio que sabe dónde están.
 - El servicio de usuario `claude-fluent.service` (dotfiles) arranca
-  `.venv/bin/uvicorn fluent.app:app` con el repo como directorio de trabajo;
+  `.venv/bin/uvicorn fluent.main:app` con el repo como directorio de trabajo;
   `task restart` lo reinicia y comprueba `/api/health`. Para desarrollar sin
   chocar con él: `task dev` (puerto 8001).
 

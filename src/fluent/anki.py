@@ -1,11 +1,23 @@
 """AnkiConnect client. Anki must be running with the AnkiConnect add-on."""
+
 import html
 import re
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Any, Iterator, NamedTuple
+from typing import Any, Iterator
 
 import httpx
+
+# Los tipos del revlog viven en el dominio de la colección; se reexportan
+# aquí para el código plano que todavía los importa de este módulo.
+from fluent.collection.domain.review import (  # noqa: F401
+    AGAIN,
+    EASY,
+    GOOD,
+    HARD,
+    Review,
+    interval_to_seconds,
+)
 
 ENDPOINT = "http://127.0.0.1:8765"
 TIMEOUT_S = 10.0
@@ -19,34 +31,67 @@ WRITE_TIMEOUT_S = 60.0
 # undo, so `call` refuses these outright unless a snapshot has been written
 # first. The guarantee lives here rather than in the callers: relying on each
 # call site to remember is exactly how a write slips through.
-WRITE_ACTIONS = frozenset({
-    # Notes and cards
-    "addNote", "addNotes", "updateNote", "updateNoteFields", "updateNoteModel",
-    "updateNoteTags", "addTags", "removeTags", "replaceTags",
-    "replaceTagsInAllNotes", "clearUnusedTags", "deleteNotes", "removeNotes",
-    "removeEmptyNotes",
-    "createDeck", "deleteDecks", "changeDeck", "moveCardsToDeck",
-    "setDueDate", "forgetCards", "relearnCards", "suspend", "unsuspend",
-    "setSpecificValueOfCard", "setEaseFactors", "answerCards", "insertReviews",
-    "storeMediaFile", "deleteMediaFile", "importPackage",
-
-    # Note types. A card template is shared by every note that uses it, so a
-    # bad edit here is not one broken card but every card of that type at once
-    # — and AnkiConnect has no deleteModel, so a note type created by mistake
-    # can only be removed from Anki's own GUI. These were missing while nothing
-    # wrote note types; card generation is what writes them, so the list grew
-    # before that landed rather than after.
-    "createModel", "updateModelTemplates", "updateModelStyling",
-    "modelFieldAdd", "modelFieldRemove", "modelFieldRename",
-    "modelFieldReposition", "modelFieldSetDescription", "modelFieldSetFont",
-    "modelFieldSetFontSize", "modelTemplateAdd", "modelTemplateRemove",
-    "modelTemplateRename", "modelTemplateReposition",
-    "findAndReplaceInModels",
-
-    # Deck options. Changing a preset re-schedules every deck that uses it.
-    "saveDeckConfig", "setDeckConfigId", "cloneDeckConfigId",
-    "removeDeckConfigId",
-})
+WRITE_ACTIONS = frozenset(
+    {
+        # Notes and cards
+        "addNote",
+        "addNotes",
+        "updateNote",
+        "updateNoteFields",
+        "updateNoteModel",
+        "updateNoteTags",
+        "addTags",
+        "removeTags",
+        "replaceTags",
+        "replaceTagsInAllNotes",
+        "clearUnusedTags",
+        "deleteNotes",
+        "removeNotes",
+        "removeEmptyNotes",
+        "createDeck",
+        "deleteDecks",
+        "changeDeck",
+        "moveCardsToDeck",
+        "setDueDate",
+        "forgetCards",
+        "relearnCards",
+        "suspend",
+        "unsuspend",
+        "setSpecificValueOfCard",
+        "setEaseFactors",
+        "answerCards",
+        "insertReviews",
+        "storeMediaFile",
+        "deleteMediaFile",
+        "importPackage",
+        # Note types. A card template is shared by every note that uses it, so a
+        # bad edit here is not one broken card but every card of that type at once
+        # — and AnkiConnect has no deleteModel, so a note type created by mistake
+        # can only be removed from Anki's own GUI. These were missing while nothing
+        # wrote note types; card generation is what writes them, so the list grew
+        # before that landed rather than after.
+        "createModel",
+        "updateModelTemplates",
+        "updateModelStyling",
+        "modelFieldAdd",
+        "modelFieldRemove",
+        "modelFieldRename",
+        "modelFieldReposition",
+        "modelFieldSetDescription",
+        "modelFieldSetFont",
+        "modelFieldSetFontSize",
+        "modelTemplateAdd",
+        "modelTemplateRemove",
+        "modelTemplateRename",
+        "modelTemplateReposition",
+        "findAndReplaceInModels",
+        # Deck options. Changing a preset re-schedules every deck that uses it.
+        "saveDeckConfig",
+        "setDeckConfigId",
+        "cloneDeckConfigId",
+        "removeDeckConfigId",
+    }
+)
 
 # Deliberately not guarded: the `gui*` actions. They open Anki's own dialogs
 # and it is the person in front of Anki who then writes — handing the session
@@ -79,6 +124,7 @@ def snapshot_evidence() -> str | None:
     """The snapshot authorising the current write, if any."""
     return _write_guard.get()
 
+
 # Anki's own definition of a mature card: an interval of three weeks or more.
 # Kept in seconds because card intervals, like revlog ones, carry their unit
 # in their sign.
@@ -90,7 +136,6 @@ MATURE_SECONDS = 21 * 86400
 LABEL_LIKE_CHARS = 24
 
 # Review buttons, as stored in the revlog.
-AGAIN, HARD, GOOD, EASY = 1, 2, 3, 4
 
 # Review types, as stored in the revlog.
 LEARNING, REVIEW, RELEARN, FILTERED, MANUAL = 0, 1, 2, 3, 4
@@ -129,43 +174,6 @@ def is_alive() -> bool:
         return False
 
 
-def interval_to_seconds(raw: int) -> int:
-    """Revlog intervals carry their unit in their sign: positive values are
-    days, negative values are seconds. Normalise both to seconds so intervals
-    from different rows can be compared."""
-    return raw * 86400 if raw >= 0 else -raw
-
-
-class Review(NamedTuple):
-    """One row of the Anki revlog, named."""
-
-    timestamp_ms: int
-    card_id: int
-    usn: int
-    button: int
-    new_interval: int
-    prev_interval: int
-    factor: int
-    duration_ms: int
-    review_type: int
-    deck: str
-
-    @classmethod
-    def from_row(cls, row: list, deck: str) -> "Review":
-        return cls(*row, deck=deck)
-
-    @property
-    def failed(self) -> bool:
-        return self.button == AGAIN
-
-    @property
-    def interval_dropped(self) -> bool:
-        """The scheduler pulled the card back in: it was forgotten."""
-        return interval_to_seconds(self.new_interval) < interval_to_seconds(
-            self.prev_interval
-        )
-
-
 def decks() -> list[str]:
     return call("deckNames")
 
@@ -186,14 +194,16 @@ def due_counts() -> list[dict]:
         new = s.get("new_count", 0)
         learn = s.get("learn_count", 0)
         review = s.get("review_count", 0)
-        out.append({
-            "deck": name,
-            "new": new,
-            "learning": learn,
-            "review": review,
-            "due": new + learn + review,
-            "total": s.get("total_in_deck", 0),
-        })
+        out.append(
+            {
+                "deck": name,
+                "new": new,
+                "learning": learn,
+                "review": review,
+                "due": new + learn + review,
+                "total": s.get("total_in_deck", 0),
+            }
+        )
     return out
 
 
@@ -210,9 +220,7 @@ def deck_card_stats() -> list[dict]:
 
     card_ids = call("findCards", query="deck:*")
     for card in call("cardsInfo", cards=card_ids) if card_ids else []:
-        deck = counts.setdefault(
-            card["deckName"], {"total": 0, "seen": 0, "mature": 0}
-        )
+        deck = counts.setdefault(card["deckName"], {"total": 0, "seen": 0, "mature": 0})
         deck["total"] += 1
         if card.get("reps", 0) > 0:
             deck["seen"] += 1
@@ -235,6 +243,7 @@ def reviews_since(timestamp_ms: int) -> list[Review]:
         out.extend(Review.from_row(row, deck) for row in rows)
     out.sort(key=lambda r: r.timestamp_ms)
     return out
+
 
 def strip_html(value: str) -> str:
     """Collapse a field to a single line. For list rows, not for editing."""
@@ -301,12 +310,20 @@ def card_summaries(card_ids: list[int]) -> dict[int, dict]:
         # type de gramática abre con "Tipo", así que la lista de atascos
         # mostraba seis filas llamadas "B · corregir". Si el primero es una
         # etiqueta corta se le pega el siguiente, que es la tarjeta de verdad.
-        first = next((f["value"] for f in ordered if f.get("order") == wanted),
-                     ordered[0]["value"] if ordered else "")
+        first = next(
+            (f["value"] for f in ordered if f.get("order") == wanted),
+            ordered[0]["value"] if ordered else "",
+        )
         text = strip_html(first)
         if len(text) < LABEL_LIKE_CHARS:
-            rest = next((strip_html(f["value"]) for f in ordered
-                         if strip_html(f["value"]) and strip_html(f["value"]) != text), "")
+            rest = next(
+                (
+                    strip_html(f["value"])
+                    for f in ordered
+                    if strip_html(f["value"]) and strip_html(f["value"]) != text
+                ),
+                "",
+            )
             if rest:
                 # Un número de orden no es ni etiqueta ni pregunta: el mazo de
                 # Refold abre con "Índice de ordenación", y "369 · bend" dice
@@ -322,6 +339,7 @@ def card_summaries(card_ids: list[int]) -> dict[int, dict]:
 
 # GUI actions. These drive Anki's own windows and never touch the collection,
 # so they are deliberately absent from WRITE_ACTIONS.
+
 
 def model_names() -> list[str]:
     return call("modelNames")

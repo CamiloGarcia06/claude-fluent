@@ -7,8 +7,8 @@ actualiza el test en el mismo commit.
 
 from datetime import date, datetime
 
-from fluent import analysis
-from fluent.anki import AGAIN, Review
+from fluent.collection.domain import analysis
+from fluent.collection.domain.review import AGAIN, Review
 
 GOOD = 3  # cualquier botón distinto de AGAIN
 
@@ -17,11 +17,30 @@ def ms(d: date, hour: int = 10) -> int:
     return int(datetime(d.year, d.month, d.day, hour).timestamp() * 1000)
 
 
-def review(day: date, card_id: int = 1, *, deck: str = "Reading::A1::Words", button: int = GOOD,
-           duration_ms: int = 4000, new_interval: int = 3, prev_interval: int = 1,
-           review_type: int = 1, hour: int = 10) -> Review:
-    return Review(ms(day, hour), card_id, 0, button, new_interval, prev_interval, 2500,
-                  duration_ms, review_type, deck)
+def review(
+    day: date,
+    card_id: int = 1,
+    *,
+    deck: str = "Reading::A1::Words",
+    button: int = GOOD,
+    duration_ms: int = 4000,
+    new_interval: int = 3,
+    prev_interval: int = 1,
+    review_type: int = 1,
+    hour: int = 10,
+) -> Review:
+    return Review(
+        ms(day, hour),
+        card_id,
+        0,
+        button,
+        new_interval,
+        prev_interval,
+        2500,
+        duration_ms,
+        review_type,
+        deck,
+    )
 
 
 TODAY = date(2026, 9, 13)
@@ -30,7 +49,10 @@ TODAY = date(2026, 9, 13)
 class TestStreak:
     def test_empty(self):
         assert analysis.streak([], TODAY) == {
-            "days": 0, "grace_used": [], "grace_left_this_month": 1, "studied_today": False,
+            "days": 0,
+            "grace_used": [],
+            "grace_left_this_month": 1,
+            "studied_today": False,
         }
 
     def test_today_in_progress_does_not_break_the_streak(self):
@@ -106,16 +128,24 @@ class TestCardStats:
 def test_failing_now_ignores_learning_and_old_cards():
     old = date(2026, 8, 1)
     recent = date(2026, 9, 12)
-    rows = [review(old, 1, button=AGAIN)] * 3                                 # vieja
-    rows += [review(recent, 2, button=AGAIN, review_type=0)] * 3              # aprendiendo
-    rows += [review(recent, 3, button=AGAIN)] * 3                             # fallada de verdad
+    rows = [review(old, 1, button=AGAIN)] * 3  # vieja
+    rows += [review(recent, 2, button=AGAIN, review_type=0)] * 3  # aprendiendo
+    rows += [review(recent, 3, button=AGAIN)] * 3  # fallada de verdad
     out = analysis.failing_now(rows, TODAY)
     assert [c["card_id"] for c in out] == [3]
 
 
 def test_parse_deck_name_is_case_insensitive_and_canonical():
-    assert analysis.parse_deck_name("grammar::b1::Phrasal verbs") == ("Grammar", "B1", "Phrasal verbs")
-    assert analysis.parse_deck_name("Reading::A1::Deep::Nested") == ("Reading", "A1", "Deep::Nested")
+    assert analysis.parse_deck_name("grammar::b1::Phrasal verbs") == (
+        "Grammar",
+        "B1",
+        "Phrasal verbs",
+    )
+    assert analysis.parse_deck_name("Reading::A1::Deep::Nested") == (
+        "Reading",
+        "A1",
+        "Deep::Nested",
+    )
     assert analysis.parse_deck_name("Reading::A1") == ("Reading", "A1", "")
     assert analysis.parse_deck_name("Reading") is None
     assert analysis.parse_deck_name("Reading::Z9::x") is None
@@ -132,7 +162,12 @@ def test_maturity_current_level_and_gaps():
     ]
     assert analysis.current_level(levels) == "B1"
     assert analysis.gaps(levels) == ["B1", "C1"]
-    assert analysis.current_level([{"level": lv, "maturity": 1.0, "total": 1} for lv in analysis.LEVELS]) == "C1"
+    assert (
+        analysis.current_level(
+            [{"level": lv, "maturity": 1.0, "total": 1} for lv in analysis.LEVELS]
+        )
+        == "C1"
+    )
 
 
 def test_severity_bands():
@@ -142,16 +177,24 @@ def test_severity_bands():
 
 
 def test_impact_shares():
-    out = analysis.impact([{"seconds_lost": 30.0}, {"seconds_lost": 10.0}], total_cards=100, total_seconds=200.0)
-    assert out == {"cards": 2, "total_cards": 100, "card_share": 0.02, "seconds": 40.0,
-                   "total_seconds": 200.0, "time_share": 0.2}
+    out = analysis.impact(
+        [{"seconds_lost": 30.0}, {"seconds_lost": 10.0}], total_cards=100, total_seconds=200.0
+    )
+    assert out == {
+        "cards": 2,
+        "total_cards": 100,
+        "card_share": 0.02,
+        "seconds": 40.0,
+        "total_seconds": 200.0,
+        "time_share": 0.2,
+    }
     assert analysis.impact([], 0, 0.0)["card_share"] == 0.0
 
 
 def test_catalog_groups_skips_scaffolding_and_finds_next_up():
     stats = [
-        {"deck": "Reading", "total": 0, "seen": 0, "mature": 0},                    # andamiaje
-        {"deck": "Reading::A1", "total": 0, "seen": 0, "mature": 0},                # andamiaje
+        {"deck": "Reading", "total": 0, "seen": 0, "mature": 0},  # andamiaje
+        {"deck": "Reading::A1", "total": 0, "seen": 0, "mature": 0},  # andamiaje
         {"deck": "Reading::A1::Words", "total": 10, "seen": 10, "mature": 8},
         {"deck": "Grammar::B1::Tenses", "total": 4, "seen": 2, "mature": 0},
         {"deck": "Maestría::MOT", "total": 7, "seen": 7, "mature": 7},
@@ -159,7 +202,7 @@ def test_catalog_groups_skips_scaffolding_and_finds_next_up():
     counts = [{"deck": "Reading::A1::Words", "due": 3}, {"deck": "Grammar::B1::Tenses", "due": 5}]
     cat = analysis.catalog(stats, counts)
     reading = next(s for s in cat["skills"] if s["skill"] == "Reading")
-    assert reading["current_level"] == "A2"          # A1 madura al 80 %, A2 vacía
+    assert reading["current_level"] == "A2"  # A1 madura al 80 %, A2 vacía
     assert reading["gaps"] == ["A2", "B1", "B2", "C1"]
     assert [d["deck"] for d in cat["unclassified"]["decks"]] == ["Maestría::MOT"]
     assert cat["total"] == 21
@@ -170,10 +213,26 @@ def test_catalog_groups_skips_scaffolding_and_finds_next_up():
 
 def test_next_up_falls_back_to_the_lowest_hole():
     skills = [
-        {"skill": "Writing", "current_level": "A1", "levels": [{"level": "A1", "decks": []}], "gaps": ["B1"]},
-        {"skill": "Grammar", "current_level": "A1", "levels": [{"level": "A1", "decks": []}], "gaps": ["A2"]},
+        {
+            "skill": "Writing",
+            "current_level": "A1",
+            "levels": [{"level": "A1", "decks": []}],
+            "gaps": ["B1"],
+        },
+        {
+            "skill": "Grammar",
+            "current_level": "A1",
+            "levels": [{"level": "A1", "decks": []}],
+            "gaps": ["A2"],
+        },
     ]
-    assert analysis.next_up(skills) == {"action": "generate", "skill": "Grammar", "level": "A2", "deck": None, "due": 0}
+    assert analysis.next_up(skills) == {
+        "action": "generate",
+        "skill": "Grammar",
+        "level": "A2",
+        "deck": None,
+        "due": 0,
+    }
     assert analysis.next_up([]) is None
 
 

@@ -1,11 +1,12 @@
 """Pure functions over a list of reviews. No I/O, no AnkiConnect, no clock:
 every function takes the data and the reference date it should work against,
 so the whole module is testable by handing it rows."""
+
 import statistics
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 
-from fluent.anki import Review, interval_to_seconds
+from .review import Review, interval_to_seconds
 
 CALENDAR_DAYS = 30
 
@@ -54,14 +55,14 @@ MIN_FAILURES = 1
 # es una suma sobre todos los repasos, así que crece con la cantidad de
 # repasos; la tasa de fallo, en cambio, tiene techo en 1.
 W_FAILURE_RATE = 60.0
-W_SECONDS_LOST = 1.0     # segundos **totales**: el costo, para Atascos
+W_SECONDS_LOST = 1.0  # segundos **totales**: el costo, para Atascos
 W_INTERVAL_DROP = 8.0
 
 # Para "vengo fallando": los fallos mandan y el tiempo sólo desempata. Es el
 # segundo **medio** por repaso y no el total, justamente para que ver una
 # tarjeta muchas veces no la suba sola.
-W_FAILURES = 6.0         # cuántas veces, no sólo en qué proporción
-W_SECONDS_EACH = 0.5     # lo lenta que es cada vez, como desempate
+W_FAILURES = 6.0  # cuántas veces, no sólo en qué proporción
+W_SECONDS_EACH = 0.5  # lo lenta que es cada vez, como desempate
 
 # Y sólo lo que estás repasando ahora. Una tarjeta que no ves hace dos semanas
 # no es algo que "vengas fallando": es de un mazo que dejaste. Medido: cinco de
@@ -147,12 +148,14 @@ def calendar(reviews: list[Review], today: date, days: int = CALENDAR_DAYS) -> l
     out = []
     for i in range(days):
         d = start + timedelta(days=i)
-        out.append({
-            "date": d.isoformat(),
-            "reviews": counts.get(d, 0),
-            "studied": counts.get(d, 0) > 0,
-            "before_start": first is not None and d < first,
-        })
+        out.append(
+            {
+                "date": d.isoformat(),
+                "reviews": counts.get(d, 0),
+                "studied": counts.get(d, 0) > 0,
+                "before_start": first is not None and d < first,
+            }
+        )
     return out
 
 
@@ -251,35 +254,41 @@ def card_stats(reviews: list[Review]) -> list[dict]:
 
         failure_rate = failures / attempts
 
-        rows_out.append({
-            "card_id": card_id,
-            "deck": rows[-1].deck,
-            "attempts": attempts,
-            "failures": failures,
-            "failure_rate": round(failure_rate, 2),
-            "interval_drops": drops,
-            "avg_duration_ms": round(statistics.mean(durations)),
-            "seconds_lost": round(seconds_lost, 1),
-            "last_seen": datetime.fromtimestamp(
-                rows[-1].timestamp_ms / 1000
-            ).isoformat(timespec="seconds"),
-            "last_interval_s": interval_to_seconds(rows[-1].new_interval),
-            # Lo que te cuesta: los segundos totales mandan, porque la pregunta
-            # es cuántos minutos te comen.
-            "score": round(
-                W_FAILURE_RATE * failure_rate
-                + W_SECONDS_LOST * seconds_lost
-                + W_INTERVAL_DROP * drops, 1),
-            # Lo que venís fallando: manda la proporción, la cantidad de fallos
-            # la respalda, y el segundo medio sólo desempata. La caída de
-            # intervalo dice casi lo mismo que un fallo —el programador la
-            # aplica cuando fallás— y por eso refuerza en vez de aportar.
-            "failing_score": round(
-                W_FAILURE_RATE * failure_rate
-                + W_FAILURES * failures
-                + W_SECONDS_EACH * seconds_each
-                + W_INTERVAL_DROP * drops, 1),
-        })
+        rows_out.append(
+            {
+                "card_id": card_id,
+                "deck": rows[-1].deck,
+                "attempts": attempts,
+                "failures": failures,
+                "failure_rate": round(failure_rate, 2),
+                "interval_drops": drops,
+                "avg_duration_ms": round(statistics.mean(durations)),
+                "seconds_lost": round(seconds_lost, 1),
+                "last_seen": datetime.fromtimestamp(rows[-1].timestamp_ms / 1000).isoformat(
+                    timespec="seconds"
+                ),
+                "last_interval_s": interval_to_seconds(rows[-1].new_interval),
+                # Lo que te cuesta: los segundos totales mandan, porque la pregunta
+                # es cuántos minutos te comen.
+                "score": round(
+                    W_FAILURE_RATE * failure_rate
+                    + W_SECONDS_LOST * seconds_lost
+                    + W_INTERVAL_DROP * drops,
+                    1,
+                ),
+                # Lo que venís fallando: manda la proporción, la cantidad de fallos
+                # la respalda, y el segundo medio sólo desempata. La caída de
+                # intervalo dice casi lo mismo que un fallo —el programador la
+                # aplica cuando fallás— y por eso refuerza en vez de aportar.
+                "failing_score": round(
+                    W_FAILURE_RATE * failure_rate
+                    + W_FAILURES * failures
+                    + W_SECONDS_EACH * seconds_each
+                    + W_INTERVAL_DROP * drops,
+                    1,
+                ),
+            }
+        )
 
     return rows_out
 
@@ -298,9 +307,12 @@ def struggling(reviews: list[Review], limit: int | None = 12) -> list[dict]:
     return ranked[:limit]
 
 
-def failing_now(reviews: list[Review], today: date,
-                limit: int | None = TODAY_STUCK_LIMIT,
-                recent_days: int = RECENT_DAYS) -> list[dict]:
+def failing_now(
+    reviews: list[Review],
+    today: date,
+    limit: int | None = TODAY_STUCK_LIMIT,
+    recent_days: int = RECENT_DAYS,
+) -> list[dict]:
     """Lo que venís fallando **de lo que estás repasando**. Es lo de Hoy.
 
     Dos diferencias con `struggling`, y las dos salieron de mirar la lista real:
@@ -321,8 +333,7 @@ def failing_now(reviews: list[Review], today: date,
     seen = [r for r in reviews if r.review_type != LEARNING_TYPE]
     cutoff = today - timedelta(days=recent_days)
 
-    fresh = [c for c in card_stats(seen)
-             if datetime.fromisoformat(c["last_seen"]).date() >= cutoff]
+    fresh = [c for c in card_stats(seen) if datetime.fromisoformat(c["last_seen"]).date() >= cutoff]
     fresh.sort(key=lambda c: -c["failing_score"])
     return fresh[:limit]
 
@@ -546,11 +557,13 @@ def catalog(deck_stats: list[dict], deck_counts: list[dict] | None = None) -> di
             continue
 
         skill, level, topic = parsed
-        classified[skill][level].append({
-            "deck": name,
-            "topic": topic or level,  # a deck named exactly Skill::Level
-            **card_counts,
-        })
+        classified[skill][level].append(
+            {
+                "deck": name,
+                "topic": topic or level,  # a deck named exactly Skill::Level
+                **card_counts,
+            }
+        )
 
     skills = []
     for skill in SKILLS:
@@ -561,24 +574,28 @@ def catalog(deck_stats: list[dict], deck_counts: list[dict] | None = None) -> di
         for level in LEVELS:
             decks_at = classified[skill][level]
             totals = _totals(decks_at)
-            levels.append({
-                "level": level,
-                "decks": decks_at,
-                "due": sum(d["due"] for d in decks_at),
-                "maturity": maturity(totals["mature"], totals["total"]),
-                **totals,
-            })
+            levels.append(
+                {
+                    "level": level,
+                    "decks": decks_at,
+                    "due": sum(d["due"] for d in decks_at),
+                    "maturity": maturity(totals["mature"], totals["total"]),
+                    **totals,
+                }
+            )
 
         totals = _totals([d for level in levels for d in level["decks"]])
-        skills.append({
-            "skill": skill,
-            "levels": levels,
-            "due": sum(level["due"] for level in levels),
-            "maturity": maturity(totals["mature"], totals["total"]),
-            "current_level": current_level(levels),
-            "gaps": gaps(levels),
-            **totals,
-        })
+        skills.append(
+            {
+                "skill": skill,
+                "levels": levels,
+                "due": sum(level["due"] for level in levels),
+                "maturity": maturity(totals["mature"], totals["total"]),
+                "current_level": current_level(levels),
+                "gaps": gaps(levels),
+                **totals,
+            }
+        )
 
     unclassified_totals = _totals(unclassified)
     return {
@@ -587,9 +604,7 @@ def catalog(deck_stats: list[dict], deck_counts: list[dict] | None = None) -> di
             "label": UNCLASSIFIED,
             "decks": unclassified,
             "due": sum(d["due"] for d in unclassified),
-            "maturity": maturity(
-                unclassified_totals["mature"], unclassified_totals["total"]
-            ),
+            "maturity": maturity(unclassified_totals["mature"], unclassified_totals["total"]),
             **unclassified_totals,
         },
         "next_up": next_up(skills),

@@ -34,7 +34,7 @@ hexcheck = { git = "https://github.com/CamiloGarcia06/hexcheck", tag = "v0.1.0" 
 src = "src/fluent"
 tests = "tests"
 allow = [
-    "src/fluent/app.py: H006 # app plano: HTTPException se va al traductor cuando haya routers",
+    "src/fluent/main.py: H006 # endpoints planos: HTTPException se va al traductor a medida que migran",
     "src/fluent/paths.py: H008 # FLUENT_ROOT se lee aquí hasta que exista shared/config.py",
 ]
 

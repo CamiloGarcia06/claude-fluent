@@ -1,4 +1,5 @@
 """Spike 2: can `claude -p` return schema-valid flashcards on the subscription?"""
+
 import json
 import subprocess
 
@@ -24,10 +25,13 @@ SCHEMA = {
 # No --bare: that mode ignores the subscription login and demands ANTHROPIC_API_KEY
 proc = subprocess.run(
     [
-        "claude", "-p",
+        "claude",
+        "-p",
         "Generate 3 English flashcards for 'to put up with'. Backs in Spanish.",
-        "--output-format", "json",
-        "--json-schema", json.dumps(SCHEMA),
+        "--output-format",
+        "json",
+        "--json-schema",
+        json.dumps(SCHEMA),
     ],
     capture_output=True,
     text=True,

@@ -9,6 +9,7 @@ límite escrito en Anki cambia lo que el propio Anki te sirve en el escritorio y
 en el móvil, y eso es una decisión de programación que le pertenece a él. La
 meta es de este app — una intención, no un tope.
 """
+
 import json
 import os
 
@@ -55,5 +56,5 @@ def write(changes: dict) -> dict:
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     tmp = STATE_PATH.with_suffix(".json.part")
     tmp.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-    os.replace(tmp, STATE_PATH)   # un corte a mitad de escritura no deja basura
+    os.replace(tmp, STATE_PATH)  # un corte a mitad de escritura no deja basura
     return state
