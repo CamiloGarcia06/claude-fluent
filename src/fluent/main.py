@@ -10,7 +10,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from fluent import anki, coach, generate, llm, practice, state
+from fluent import anki, state
 
 # Con alias: `syllabus` es el nombre de la mitad del app —el endpoint, la
 # pantalla, el archivo— y el módulo se lee dentro de las funciones que lo
@@ -29,7 +29,21 @@ from fluent.collection.application.build_today import BuildToday
 from fluent.collection.domain import analysis
 from fluent.collection.infrastructure.anki_reader import AnkiReader
 from fluent.paths import STATIC_DIR
+from fluent.shared.clock import SystemClock
 from fluent.shared.errors import Conflict, DomainError, Invalid, Unavailable
+from fluent.syllabi.application.cover_syllabus import CoverSyllabus
+from fluent.syllabi.application.freeze_syllabus import FreezeSyllabus
+from fluent.syllabi.application.read_syllabus import ReadSyllabus
+from fluent.syllabi.infrastructure.disk_store import DiskSyllabusStore
+from fluent.syllabi.infrastructure.llm_model import LlmSyllabusModel
+from fluent.writing.application.answer_turn import AnswerTurn
+from fluent.writing.application.close_session import CloseSession
+from fluent.writing.application.get_patterns import GetPatterns
+from fluent.writing.application.get_practice import GetPractice
+from fluent.writing.application.mark_pattern import MarkPattern
+from fluent.writing.application.start_session import StartSession
+from fluent.writing.infrastructure.disk_practice import DiskPatterns, DiskSessions
+from fluent.writing.infrastructure.llm_coach import LlmCoach
 
 app = FastAPI(title="claude-fluent")
 
@@ -45,6 +59,21 @@ propose_cards_uc = ProposeCards(_cards, _proposer)
 write_notes_uc = WriteNotes(_cards)
 repair_note_uc = RepairNote(_cards, _proposer)
 apply_repair_uc = ApplyRepair(_cards)
+_clock = SystemClock()
+_syllabi = DiskSyllabusStore()
+_syllabus_model = LlmSyllabusModel()
+read_syllabus_uc = ReadSyllabus(_syllabi)
+freeze_syllabus_uc = FreezeSyllabus(_syllabi, _syllabus_model, _clock)
+cover_syllabus_uc = CoverSyllabus(_syllabi, _syllabus_model, _cards, _clock)
+_sessions = DiskSessions()
+_patterns = DiskPatterns()
+_coach = LlmCoach()
+get_practice_uc = GetPractice(_sessions)
+start_session_uc = StartSession(_sessions, _clock)
+answer_turn_uc = AnswerTurn(_sessions, _coach)
+close_session_uc = CloseSession(_sessions, _patterns, _coach, _clock)
+get_patterns_uc = GetPatterns(_patterns)
+mark_pattern_uc = MarkPattern(_patterns)
 
 
 @app.exception_handler(DomainError)
@@ -66,18 +95,6 @@ def translate_domain_error(_: Request, exc: DomainError) -> JSONResponse:
 
 # The Atascos screen is the whole ranking, not the head of it that Today shows.
 STUCK_LIMIT = 50
-
-
-# El nivel al que se conversa cuando la pantalla no manda uno. **No se lee del
-# catálogo.** `current_level` para Writing dice A1, pero por ausencia y no por
-# diagnóstico: la caminata A1→C1 se detiene en el primer nivel que no se
-# sostiene, y un nivel vacío tampoco se sostiene, así que con Writing en cero
-# tarjetas siempre va a decir A1. B1 es i+1 sobre lo que la colección sí
-# muestra — Grammar en A1/A2 contra Reading y Speaking en B2.
-PRACTICE_LEVEL = "B1"
-
-# How many existing cards of a level the model is shown (cobertura del temario).
-FRONTS_FOR_PROMPT = 60
 
 
 @app.middleware("http")
@@ -187,40 +204,6 @@ def add_cards() -> dict:
     return {"ok": True}
 
 
-def _catalog() -> dict:
-    return analysis.catalog(anki.deck_card_stats(), anki.due_counts())
-
-
-def _decks_at(catalog: dict, focus: dict) -> list[str]:
-    """The decks of one skill and level, by full name.
-
-    The catalogue is a tree and both the term proposal and the syllabus need
-    the same branch of it; walking it twice by hand is how the two drift.
-    """
-    for skill in catalog["skills"]:
-        if skill["skill"] != focus["skill"]:
-            continue
-        for level in skill["levels"]:
-            if level["level"] == focus["level"]:
-                return [d["deck"] for d in level["decks"]]
-    return []
-
-
-def _deck_totals_at(catalog: dict, focus: dict) -> dict[str, int]:
-    """`{"Grammar::A1::Verb to be": 6, …}` — los mazos de un nivel y su tamaño.
-
-    Es de lo que depende la cobertura: un mazo nuevo, uno borrado o una tarjeta
-    más y lo guardado deja de valer.
-    """
-    for skill in catalog["skills"]:
-        if skill["skill"] != focus["skill"]:
-            continue
-        for level in skill["levels"]:
-            if level["level"] == focus["level"]:
-                return {d["deck"]: int(d.get("total", 0)) for d in level["decks"]}
-    return {}
-
-
 @app.post("/api/generate/terms")
 def generate_terms(payload: dict | None = None) -> dict:
     """What is worth making cards for, read off the failures and the holes.
@@ -235,179 +218,29 @@ def generate_terms(payload: dict | None = None) -> dict:
     )
 
 
-def _syllabus_body(
-    stored: dict, points: list[dict] | None = None, coverage: dict | None = None
-) -> dict:
-    """La forma que devuelven las tres llamadas del temario.
-
-    Leer, congelar y cubrir hablan del mismo objeto y la pantalla lo dibuja con
-    el mismo código; que una devuelva una clave distinta es exactamente cómo se
-    rompe. `covered` es `None` mientras la cobertura no se derivó — no es cero,
-    que querría decir "ningún punto cubierto", que es otra cosa.
-    """
-    skill, level = stored["skill"], stored["level"]
-    return {
-        "skill": skill,
-        "level": level,
-        "frozen": True,
-        "unreadable": False,
-        "points": points if points is not None else stored["points"],
-        "covered": (sum(1 for p in points if p["covered_by"]) if points is not None else None),
-        "total": len(stored["points"]),
-        "drafts": stored.get("drafts"),
-        "generated": stored.get("generated"),
-        "edited": stored.get("edited", False),
-        # Cuándo se calculó la cobertura que viaja en `points`, y contra qué
-        # mazos. Quien lee compara ese mapa con el de ahora y sabe si sigue
-        # valiendo; el servidor no lo juzga, porque juzgarlo costaría leer Anki
-        # y esta llamada promete no hacerlo.
-        "coverage": coverage,
-        "path": str(syllabus_store.path_for(skill, level)),
-    }
-
-
 @app.get("/api/syllabus")
 def syllabus_frozen(skill: str = "", level: str = "") -> dict:
-    """El temario congelado de un nivel. Sin cobertura, sin modelo, sin Anki.
-
-    Es la mitad estable y está en disco, así que se sirve en milisegundos: la
-    pantalla pinta los puntos al instante y pide la cobertura después, que es
-    la que tarda. Antes las dos mitades viajaban en la misma llamada y un nivel
-    ya congelado se veía igual que uno generándose desde cero — cuarenta
-    segundos en blanco bajo un cartel que decía "la primera vez tarda un par de
-    minutos".
-
-    Un nivel sin temario contesta `frozen: false`, que no es un error: es la
-    primera vez, y quien pregunta necesita distinguirlas.
-    """
-    focus = generate.focus_for(skill, level)
-    if not focus:
-        raise HTTPException(400, "unknown skill or level")
-
-    # "No existe" y "existe y no se puede leer" son dos cosas distintas, y la
-    # pantalla las trataba igual: las dos contestaban `frozen: false` y el
-    # primer clic regeneraba. Sobre un archivo que no existe eso es correcto
-    # —es la primera vez del nivel, no hay nada que perder—; sobre uno roto es
-    # pisar trabajo tuyo sin preguntar.
-    state = syllabus_store.status(focus["skill"], focus["level"])
-    stored = syllabus_store.load(focus["skill"], focus["level"]) if state == "ok" else None
-    if stored is None:
-        return {
-            "skill": focus["skill"],
-            "level": focus["level"],
-            "frozen": False,
-            "unreadable": state == "unreadable",
-            "points": [],
-            "covered": None,
-            "total": 0,
-            "drafts": None,
-            "generated": None,
-            "edited": False,
-            "coverage": None,
-            "path": str(syllabus_store.path_for(focus["skill"], focus["level"])),
-        }
-
-    # Y la cobertura que ya se pagó, si sirve para estos puntos. Sigue sin
-    # modelo y sin Anki: es un archivo más, se lee en microsegundos, y es lo
-    # que hace que abrir un temario dos veces cueste medio minuto una vez y no
-    # dos.
-    cached = syllabus_store.load_coverage(focus["skill"], focus["level"], stored["points"])
-    if cached is None:
-        return _syllabus_body(stored)
-
-    points = [{**p, **cached["by_point"][p["point"]]} for p in stored["points"]]
-    return _syllabus_body(
-        stored, points, {"computed": cached["computed"], "decks": cached["decks"]}
-    )
+    """El temario congelado de un nivel, con la cobertura guardada si sirve.
+    Sin modelo, sin Anki: milisegundos. `frozen: false` es la primera vez."""
+    return read_syllabus_uc(skill, level)
 
 
 @app.post("/api/syllabus")
 def syllabus_freeze(payload: dict | None = None) -> dict:
-    """Congelar el temario de un nivel: tres borradores y una fusión, ~100 s.
-
-    Sólo llama al modelo si ese nivel todavía no tiene temario, o si pediste
-    `{regenerate: true}`. Con uno congelado devuelve el que hay y no gasta una
-    llamada: la mitad estable se genera una vez en la vida del nivel.
-
-    No toca Anki. Qué enseña un A1 es un hecho externo y no depende de tu
-    colección, así que esto funciona con Anki cerrado. **No escribe en Anki.**
-    """
-    focus = generate.focus_for((payload or {}).get("skill", ""), (payload or {}).get("level", ""))
-    if not focus:
-        raise HTTPException(400, "unknown skill or level")
-
-    skill, level = focus["skill"], focus["level"]
-    regenerate = bool((payload or {}).get("regenerate"))
-
-    stored = None if regenerate else syllabus_store.load(skill, level)
-    if stored is not None:
-        return _syllabus_body(stored)
-
-    try:
-        built = generate.build_syllabus(skill, level)
-    except llm.LLMError as e:
-        raise HTTPException(502, f"claude -p failed: {e}") from e
-    if not built["points"]:
-        raise HTTPException(502, "el modelo no devolvió ningún punto")
-
-    stored = syllabus_store.save(
-        skill, level, built["points"], built["drafts"], datetime.now().isoformat(timespec="seconds")
+    """Congelar el temario de un nivel (tres borradores y una fusión, ~100 s).
+    Sólo llama al modelo si no hay temario o con `{regenerate: true}`."""
+    body = payload or {}
+    return freeze_syllabus_uc(
+        body.get("skill", ""), body.get("level", ""), bool(body.get("regenerate"))
     )
-    return _syllabus_body({**stored, "edited": False})
 
 
 @app.post("/api/syllabus/coverage")
 def syllabus_coverage(payload: dict | None = None) -> dict:
-    """Qué mazo de los tuyos cubre cada punto del temario. ~40 s.
-
-    Ésta es la mitad que sí se deriva en cada lectura: es un hecho sobre la
-    colección y cambia con cada tarjeta que escribís.
-
-    Los puntos se leen del disco y no del cuerpo del pedido. `generate.cover`
-    recorre la lista **congelada** para que un punto inventado quede fuera y
-    uno saltado aparezca igual, sin cubrir; esa garantía no vale nada si la
-    lista la manda quien llama. **No escribe nada.**
-    """
-    focus = generate.focus_for((payload or {}).get("skill", ""), (payload or {}).get("level", ""))
-    if not focus:
-        raise HTTPException(400, "unknown skill or level")
-
-    if not anki.is_alive():
-        raise HTTPException(503, "AnkiConnect is not answering — is Anki running?")
-
-    skill, level = focus["skill"], focus["level"]
-    stored = syllabus_store.load(skill, level)
-    if stored is None:
-        raise HTTPException(409, "ese nivel todavía no tiene temario congelado")
-
-    catalog = _catalog()
-    decks = _decks_at(catalog, focus)
-    totals = _deck_totals_at(catalog, focus)
-
-    # Repartida entre los mazos y no por mazo: siete mazos a sesenta frentes
-    # serían cuatrocientas líneas de prompt, y un tope por mazo dejaría al
-    # último sin una sola tarjeta a la vista — invisible es indistinguible de
-    # vacío, y se marcaría como no cubierto.
-    per_deck = max(4, FRONTS_FOR_PROMPT // max(1, len(decks)))
-    have: list[str] = []
-    for deck in decks:
-        topic = deck.split("::")[-1]
-        have += [f"{topic}: {front}" for front in anki.deck_fronts(deck, limit=per_deck)]
-
-    try:
-        points = generate.cover(
-            skill, level, stored["points"], [d.split("::")[-1] for d in decks], have
-        )
-    except llm.LLMError as e:
-        raise HTTPException(502, f"claude -p failed: {e}") from e
-
-    # Guardar lo que acaba de costar medio minuto, junto con los mazos contra
-    # los que se calculó. **Es lo único que esta llamada escribe**, y escribe
-    # en su propio archivo: el temario no se toca.
-    saved = syllabus_store.save_coverage(
-        skill, level, points, totals, datetime.now().isoformat(timespec="seconds")
-    )
-    return _syllabus_body(stored, points, {"computed": saved["computed"], "decks": saved["decks"]})
+    """Qué mazo de los tuyos cubre cada punto del temario (~40 s). Sólo
+    escribe la cobertura, en su propio archivo."""
+    body = payload or {}
+    return cover_syllabus_uc(body.get("skill", ""), body.get("level", ""))
 
 
 @app.post("/api/generate/cards")
@@ -439,198 +272,44 @@ def apply_repair(note_id: int, payload: dict) -> dict:
 
 
 # ── La práctica de escritura ──────────────────────────────────────────────
-# Ninguno de estos seis toca Anki, así que ninguno lleva el guardia de 503. Es
-# deliberado y hay que sostenerlo: conversar en inglés no necesita la colección
-# para nada, y heredar el guardia por copiar y pegar mataría la pantalla entera
-# cada vez que Anki está cerrado, sin ninguna razón.
-
-
-def _practice_level(value) -> str:
-    """El nivel que manda la pantalla, contra la tupla cerrada de siempre."""
-    wanted = str(value or "").strip().lower()
-    for level in analysis.LEVELS:
-        if level.lower() == wanted:
-            return level
-    return PRACTICE_LEVEL
-
-
-def _open_or_404(session_id) -> dict:
-    """La sesión que el cliente nombró, abierta y escribible, o el error."""
-    try:
-        practice._valid_id(session_id)
-    except ValueError as e:
-        raise HTTPException(400, str(e)) from e
-
-    session = practice.load(str(session_id))
-    if session is None:
-        raise HTTPException(404, "esa sesión no existe")
-    if session["closed"]:
-        raise HTTPException(409, "esa sesión ya está cerrada")
-    return session
+# Ninguno de estos seis toca Anki: conversar en inglés no necesita la colección.
 
 
 @app.get("/api/practice/session")
 def practice_session() -> dict:
-    """La sesión abierta, y la última cerrada. Lee disco: sin modelo.
-
-    `last` viaja entera para que releer el análisis no cueste una segunda
-    petición: es un archivo local y una sesión completa son unos pocos kilobytes.
-    """
-    return {
-        "session": practice.open_session(),
-        "last": practice.last_closed(),
-        "topics": practice.recent_topics(),
-    }
+    """La sesión abierta, la última cerrada y los temas recientes. Lee disco."""
+    return get_practice_uc()
 
 
 @app.post("/api/practice/session")
 def practice_start(payload: dict | None = None) -> dict:
-    """Abrir una sesión sobre un tema.
-
-    No llama al modelo: el saludo lo compone el app. Quince segundos de espera
-    antes de poder escribir la primera palabra es exactamente donde se abandona,
-    y para decir "hablemos de anime" no hace falta un `claude -p`.
-    """
+    """Abrir una sesión sobre un tema. No llama al modelo."""
     body = payload or {}
-    topic = " ".join(str(body.get("topic", "")).split())[:60]
-    if not topic:
-        raise HTTPException(400, "elegí un tema para conversar")
-
-    level = _practice_level(body.get("level"))
-
-    current = practice.open_session()
-    if current and not body.get("restart"):
-        raise HTTPException(409, "ya tenés una sesión abierta")
-    if current:
-        current["closed"] = True
-        current["abandoned"] = True
-        current["closed_at"] = datetime.now().isoformat(timespec="seconds")
-        practice.save(current)
-
-    session = practice.new_session(topic, level)
-    return {
-        "session": session,
-        "opening": f"Let's talk about {topic}. What's on your mind?",
-    }
+    return start_session_uc(body.get("topic", ""), body.get("level"), bool(body.get("restart")))
 
 
 @app.post("/api/practice/turn")
 def practice_turn(payload: dict) -> dict:
-    """Responder un mensaje y corregir lo que estorbó. Una llamada, 13-21 s.
-
-    El turno se persiste dos veces: tu texto primero, la respuesta después. Sin
-    ese primer write, recargar a los cinco segundos borra lo que escribiste.
-    """
-    session = _open_or_404(payload.get("session_id"))
-
-    text = str(payload.get("text", "")).strip()
-    if not text:
-        raise HTTPException(400, "no escribiste nada")
-    if len(text) > coach.MAX_TEXT_CHARS:
-        raise HTTPException(400, "el mensaje es demasiado largo")
-    # Reintentar reescribe el turno que falló; mandar uno nuevo lo agrega.
-    retry = payload.get("retry_index")
-    if retry is None:
-        if len(session["turns"]) >= practice.MAX_TURNS:
-            raise HTTPException(
-                409, f"esta sesión ya llegó a {practice.MAX_TURNS} turnos: cerrala y analizala"
-            )
-        turn = practice.append_turn(session, text)
-    else:
-        try:
-            turn = practice.retry_turn(session, int(retry), text)
-        except (TypeError, ValueError, IndexError) as e:
-            raise HTTPException(400, f"no se puede reintentar ese turno: {e}") from e
-    try:
-        answer = coach.turn(
-            session["topic"], session["level"], session["turns"][: turn["index"]], text
-        )
-    except llm.LLMError as e:
-        # El turno queda visible y reintentable: cuesta ese turno y nada más.
-        practice.finish_turn(session, turn["index"], None, str(e))
-        raise HTTPException(502, f"claude -p failed: {e}") from e
-
-    return {
-        "turn": practice.finish_turn(session, turn["index"], answer),
-        "total": len(session["turns"]),
-    }
+    """Responder un mensaje y corregir lo que estorbó. Una llamada, 13-21 s."""
+    return answer_turn_uc(
+        payload.get("session_id"), payload.get("text", ""), payload.get("retry_index")
+    )
 
 
 @app.post("/api/practice/close")
 def practice_close(payload: dict) -> dict:
-    """Leer la sesión entera de una vez y contar los patrones. ~20-40 s.
-
-    El único endpoint que escribe `patterns.json`. Se cuenta acá y no en cada
-    turno porque el mismo error se corregiría dos veces —una en el turno, otra
-    en el análisis— y porque el cierre es lo único que ve la sesión completa y
-    sabe qué se repitió, que es la pregunta que el contador responde.
-    """
-    session = _open_or_404(payload.get("session_id"))
-    done = [t for t in session["turns"] if t["state"] == "done"]
-
-    analysis_result = None
-    if done:
-        try:
-            analysis_result = coach.close(session["topic"], session["level"], session["turns"])
-        except llm.LLMError as e:
-            raise HTTPException(502, f"claude -p failed: {e}") from e
-
-    session["analysis"] = analysis_result
-    session["closed"] = True
-    session["closed_at"] = datetime.now().isoformat(timespec="seconds")
-    practice.save(session)
-
-    if analysis_result is None:
-        return {"session": session, "counted": [], "ready": []}
-
-    stored = practice.count(
-        practice.read_patterns(),
-        analysis_result["areas"],
-        analysis_result["unmatched"],
-        session["id"],
-    )
-    practice.write_patterns(stored)
-
-    counted = {a["pattern"] for a in analysis_result["areas"] if a["pattern"]}
-    rows = practice.listing(stored)
-    return {
-        "session": session,
-        "counted": [r for r in rows if r["key"] in counted],
-        "ready": [r for r in rows if r["ready"]],
-        "threshold": practice.PATTERN_THRESHOLD,
-    }
+    """Leer la sesión entera de una vez y contar los patrones."""
+    return close_session_uc(payload.get("session_id"))
 
 
 @app.get("/api/practice/patterns")
 def practice_patterns() -> dict:
-    """El conteo entero. `unmatched` no es un contador: es lo que le falta al
-    catálogo, que es tuyo para ampliar."""
-    stored = practice.read_patterns()
-    return {
-        "patterns": practice.listing(stored),
-        "unmatched": stored["unmatched"],
-        "threshold": practice.PATTERN_THRESHOLD,
-    }
+    return get_patterns_uc()
 
 
 @app.post("/api/practice/patterns")
 def practice_mark(payload: dict) -> dict:
-    """`carded` cuando ya escribiste la tarjeta, `reset` cuando no te importa.
-
-    Sin esto la fila te reclama la misma tarjeta para siempre.
-    """
-    try:
-        stored = practice.mark(
-            practice.read_patterns(),
-            str(payload.get("key", "")),
-            str(payload.get("action", "")),
-            practice.stamp(),
-        )
-    except ValueError as e:
-        raise HTTPException(400, str(e)) from e
-
-    practice.write_patterns(stored)
-    return {"patterns": practice.listing(stored), "threshold": practice.PATTERN_THRESHOLD}
+    return mark_pattern_uc(payload.get("key"), payload.get("action"))
 
 
 # Must go last: mounted at the root, it swallows the /api routes above it.

@@ -74,6 +74,19 @@ def decks_at(catalog: dict, focus: dict) -> list[str]:
     return []
 
 
+def deck_totals_at(catalog: dict, focus: dict) -> dict[str, int]:
+    """`{"Grammar::A1::Verb to be": 6, …}` — los mazos de un nivel y su tamaño.
+    Es de lo que depende la cobertura: un mazo nuevo o una tarjeta más y lo
+    guardado deja de valer."""
+    for skill in catalog["skills"]:
+        if skill["skill"] != focus["skill"]:
+            continue
+        for level in skill["levels"]:
+            if level["level"] == focus["level"]:
+                return {d["deck"]: int(d.get("total", 0)) for d in level["decks"]}
+    return {}
+
+
 # Compatibilidad con generate.py mientras siga plano.
 _canonical = canonical
 _clean_topic = clean_topic

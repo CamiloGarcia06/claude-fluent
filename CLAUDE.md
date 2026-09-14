@@ -14,9 +14,15 @@ errores), puertos `CardStore` y `Proposer`, casos de uso ProposeTerms /
 ProposeCards / WriteNotes / RepairNote / ApplyRepair, y adaptadores sobre
 `anki.py`, `snapshot.py`, `generate.py` y `repair.py` (que siguen planos: los
 prompts y la regla de snapshot viven ahí). `shared/types.py` tiene SKILLS,
-LEVELS y Review. Siguiente: `syllabus`, `practice`; después `anki.py`,
-`snapshot.py`, `llm.py` y los prompts a infraestructura, y los endpoints a
-routers por funcionalidad.
+LEVELS y Review. También `syllabi` (temario: ReadSyllabus / FreezeSyllabus / CoverSyllabus
+sobre `syllabus.py` y `generate.py`) y `writing` (práctica de escritura:
+GetPractice / StartSession / AnswerTurn / CloseSession / GetPatterns /
+MarkPattern sobre `practice.py` y `coach.py`). `shared/clock.py` es el reloj
+real; cada dominio declara su puerto `Clock`. Todos los endpoints son ya de
+una línea. Siguiente: `anki.py`, `snapshot.py`, `llm.py`, `generate.py`,
+`repair.py`, `coach.py`, `practice.py` y `syllabus.py` dejan de ser planos
+(cada uno a la infraestructura de su funcionalidad), los endpoints pasan a
+routers, y se retiran las dos excepciones de hexcheck.
 
 - `task check` antes de cualquier PR (ruff, pyright básico, pytest, hexcheck).
 - Los tests corren contra una raíz temporal (`FLUENT_ROOT`): nunca tocan `data/`.
