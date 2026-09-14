@@ -20,8 +20,7 @@ exactamente lo que ensucia la racha, el calendario y el ranking de atascos.
 import argparse
 import sys
 
-import anki
-import snapshot
+from fluent import anki, snapshot
 
 # Skill::Level::Topic <- los mazos que se funden en él, y por qué.
 PLAN = [

@@ -29,7 +29,9 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
-SYLLABUS_DIR = Path(__file__).resolve().parent / "data" / "syllabus"
+from fluent.paths import DATA_DIR
+
+SYLLABUS_DIR = DATA_DIR / "syllabus"
 
 # La cobertura vive **al lado** y no adentro del temario, y son tres razones.
 #

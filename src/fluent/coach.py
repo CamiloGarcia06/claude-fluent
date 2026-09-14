@@ -19,7 +19,7 @@ sólo hace falta donde se cuenta.
 """
 import re
 
-import llm
+from fluent import llm
 
 SYSTEM_PROMPT = (
     "You are an English conversation partner and writing coach for a Spanish "

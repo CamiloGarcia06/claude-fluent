@@ -13,7 +13,7 @@ data/snapshots/, and --undo snapshots each note before deleting it.
 """
 import sys
 
-import snapshot
+from fluent import snapshot
 
 DECK = "claude-fluent-test"
 

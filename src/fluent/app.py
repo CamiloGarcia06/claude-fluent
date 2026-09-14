@@ -5,19 +5,13 @@ from datetime import date, datetime, timedelta
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 
-import analysis
-import anki
-import coach
-import generate
-import llm
-import practice
-import repair
-import snapshot
-import state
+from fluent import analysis, anki, coach, generate, llm, practice, repair, snapshot, state
+
 # Con alias: `syllabus` es el nombre de la mitad del app —el endpoint, la
 # pantalla, el archivo— y el módulo se lee dentro de las funciones que lo
 # sirven. Sin alias, cualquier nombre local lo taparía.
-import syllabus as syllabus_store
+from fluent import syllabus as syllabus_store
+from fluent.paths import STATIC_DIR
 
 app = FastAPI(title="claude-fluent")
 
@@ -810,4 +804,4 @@ def practice_mark(payload: dict) -> dict:
 
 
 # Must go last: mounted at the root, it swallows the /api routes above it.
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")

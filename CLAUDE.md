@@ -1,5 +1,24 @@
 # claude-fluent
 
+Sigue la skill global `hexagonal-fastapi`. **Migración en curso** (Fase 6 del
+plan de la plataforma personal): el paquete ya vive en `src/fluent/` con uv,
+Taskfile y tests de caracterización, pero el código sigue plano. `task hex`
+corre `hexcheck --warn` hasta que existan funcionalidades; cada módulo que se
+mueva a `domain/`, `application/` o `infrastructure/` retira sus excepciones.
+Orden previsto: `analysis.py` (ya es puro) → `anki.py`, `llm.py`, `coach.py` a
+`infrastructure/` → `app.py` a routers por funcionalidad.
+
+- `task check` antes de cualquier PR (ruff, pyright básico, pytest, hexcheck).
+- Los tests corren contra una raíz temporal (`FLUENT_ROOT`): nunca tocan `data/`.
+- `data/` y `static/` siguen en la raíz del repo; `src/fluent/paths.py` es el
+  único sitio que sabe dónde están.
+- El servicio de usuario `claude-fluent.service` (dotfiles) arranca
+  `.venv/bin/uvicorn fluent.app:app` con el repo como directorio de trabajo;
+  `task restart` lo reinicia y comprueba `/api/health`. Para desarrollar sin
+  chocar con él: `task dev` (puerto 8001).
+
+## Particularidades (el CLAUDE.md original, aún vigente)
+
 Personal app to improve my English. **Single user: me.** Not a product, will not
 be scaled, will never have other users.
 

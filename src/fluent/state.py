@@ -11,9 +11,10 @@ meta es de este app — una intención, no un tope.
 """
 import json
 import os
-from pathlib import Path
 
-STATE_PATH = Path(__file__).resolve().parent / "data" / "state.json"
+from fluent.paths import DATA_DIR
+
+STATE_PATH = DATA_DIR / "state.json"
 
 # Cuarenta tarjetas son unos quince minutos, que es el hueco real antes del
 # trabajo. Ningún atraso justifica una meta que no entra en ese hueco.

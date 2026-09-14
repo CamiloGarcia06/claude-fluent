@@ -13,9 +13,7 @@ costs that term only.
 """
 import re
 
-import analysis
-import anki
-import llm
+from fluent import analysis, anki, llm
 
 # The note type this app writes. Stock Basic has no room for an example
 # sentence, and the example is what makes a vocabulary card usable instead of

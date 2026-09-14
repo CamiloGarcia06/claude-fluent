@@ -27,9 +27,10 @@ import re
 from datetime import datetime, timedelta
 from pathlib import Path
 
-import coach
+from fluent import coach
+from fluent.paths import DATA_DIR
 
-PRACTICE_DIR = Path(__file__).resolve().parent / "data" / "practice"
+PRACTICE_DIR = DATA_DIR / "practice"
 SESSIONS_DIR = PRACTICE_DIR / "sessions"
 PATTERNS_PATH = PRACTICE_DIR / "patterns.json"
 

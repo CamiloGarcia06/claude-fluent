@@ -2,8 +2,7 @@
 
 Proposes only. Nothing here writes to the collection — see snapshot.py.
 """
-import anki
-import llm
+from fluent import anki, llm
 
 # The model returns fields as a list of name/value pairs rather than an object:
 # field names differ per note type, and JSON Schema cannot describe an object

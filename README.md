@@ -20,8 +20,9 @@ schedule or run reviews: it **syncs, analyses and generates cards.**
 ## Run it
 
 ```bash
-source .venv/bin/activate
-uvicorn app:app --reload      # http://localhost:8000
+uv sync                       # crea .venv con las dependencias del pyproject
+task dev                      # http://127.0.0.1:8001 con recarga (el servicio ocupa el 8000)
+task check                    # ruff, pyright, pytest, hexcheck
 ```
 
 Anki must be running with the AnkiConnect add-on (code `2055492159`), or every

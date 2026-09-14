@@ -5,7 +5,7 @@ import statistics
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 
-from anki import Review, interval_to_seconds
+from fluent.anki import Review, interval_to_seconds
 
 CALENDAR_DAYS = 30
 
@@ -373,7 +373,7 @@ def parse_deck_name(name: str) -> tuple[str, str, str] | None:
         return None
 
     skill = next((s for s in SKILLS if s.lower() == parts[0].lower()), None)
-    level = next((l for l in LEVELS if l.lower() == parts[1].lower()), None)
+    level = next((lvl for lvl in LEVELS if lvl.lower() == parts[1].lower()), None)
     if skill is None or level is None:
         return None
 

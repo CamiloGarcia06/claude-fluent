@@ -21,9 +21,10 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-import anki
+from fluent import anki
+from fluent.paths import DATA_DIR
 
-SNAPSHOT_DIR = Path(__file__).resolve().parent / "data" / "snapshots"
+SNAPSHOT_DIR = DATA_DIR / "snapshots"
 
 
 def _stamp() -> str:
@@ -141,7 +142,7 @@ def add_notes(deck: str, notes: list[dict]) -> tuple[list[int], Path, list[dict]
 
         checks = anki.call("canAddNotesWithErrorDetail", notes=payload)
         writable, refused = [], []
-        for note, front, check in zip(payload, fronts, checks):
+        for note, front, check in zip(payload, fronts, checks, strict=False):
             if check.get("canAdd"):
                 writable.append(note)
             else:
