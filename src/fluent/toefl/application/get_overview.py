@@ -1,11 +1,12 @@
 """Caso de uso: la cabecera de la pantalla. Cuántos ejercicios quedan sin hacer
 y, por patrón, cómo vienen los últimos intentos. En writing, además, las notas
-de las últimas entregas."""
+de las últimas entregas; en reading, los aciertos y el tiempo de las últimas
+lecturas."""
 
 from dataclasses import asdict
 
 from fluent.toefl.domain.advice import stats, weakest
-from fluent.toefl.domain.catalog import KINDS, WRITING_KINDS
+from fluent.toefl.domain.catalog import KINDS, READING_KINDS, WRITING_KINDS
 from fluent.toefl.domain.ports import AttemptLog, ItemBank, SubmissionLog
 
 # Las notas que se muestran. Son las últimas, no un promedio: un promedio de
@@ -36,6 +37,17 @@ class GetOverview:
             if kind in WRITING_KINDS:
                 out[kind]["recent"] = [
                     {"at": s.get("at"), "score": s.get("score"), "words": s.get("words")}
+                    for s in self._submissions.recent(kind)[-RECENT_SCORES:]
+                ]
+            if kind in READING_KINDS:
+                out[kind]["recent"] = [
+                    {
+                        "at": s.get("at"),
+                        "score": s.get("score"),
+                        "total": s.get("total"),
+                        "seconds": s.get("seconds"),
+                        "target_seconds": s.get("target_seconds"),
+                    }
                     for s in self._submissions.recent(kind)[-RECENT_SCORES:]
                 ]
         return out

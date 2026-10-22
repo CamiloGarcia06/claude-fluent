@@ -50,6 +50,7 @@ from fluent.syllabi.infrastructure.disk_store import DiskSyllabusStore
 from fluent.syllabi.infrastructure.llm_model import LlmSyllabusModel
 from fluent.toefl.application.get_overview import GetOverview
 from fluent.toefl.application.grade_attempt import GradeAttempt
+from fluent.toefl.application.grade_reading import GradeReading
 from fluent.toefl.application.next_item import NextItem
 from fluent.toefl.application.refill_bank import RefillBank
 from fluent.toefl.application.submit_writing import SubmitWriting
@@ -141,6 +142,7 @@ def build_app() -> FastAPI:
         grade=GradeAttempt(toefl_bank, toefl_log, clock),
         refill=RefillBank(toefl_bank, LlmGenerator(generate)),
         submit=SubmitWriting(toefl_bank, LlmGrader(generate), toefl_log, toefl_submissions, clock),
+        read=GradeReading(toefl_bank, toefl_log, toefl_submissions, clock),
     )
 
     app = FastAPI(title="claude-fluent")

@@ -1,5 +1,5 @@
 """`data/toefl/` — el banco de ejercicios, los últimos intentos y las entregas
-de writing.
+de writing y de reading.
 
 Mismo molde que `writing/infrastructure/sessions.py`: escritura atómica,
 relectura desconfiada (un renglón que ya no valida se salta, no tumba la
@@ -12,9 +12,10 @@ from collections.abc import Callable
 from pathlib import Path
 
 from fluent.shared.config import DATA_DIR
-from fluent.toefl.domain.catalog import DISCUSSION, EMAIL, SENTENCE, WORDS
+from fluent.toefl.domain.catalog import ACADEMIC, DAILY, DISCUSSION, EMAIL, SENTENCE, WORDS
 from fluent.toefl.domain.entities import Attempt, Gap, SentenceItem, WordsItem
 from fluent.toefl.domain.ports import Item
+from fluent.toefl.domain.reading import Question, ReadingItem
 from fluent.toefl.domain.writing import DiscussionPrompt, EmailPrompt, Post
 
 TOEFL_DIR = DATA_DIR / "toefl"
@@ -24,7 +25,8 @@ TOEFL_DIR = DATA_DIR / "toefl"
 # que se cae del tope vuelve a contar como ejercicio sin hacer, y está bien:
 # es repaso.
 MAX_ATTEMPTS = 500
-# Las entregas guardan el texto entero: cincuenta alcanzan para releer lo último.
+# Las entregas de writing guardan el texto entero: cincuenta alcanzan para
+# releer lo último. Las de reading son un renglón; comparten el tope.
 MAX_SUBMISSIONS = 50
 
 
@@ -122,12 +124,48 @@ def _discussion_row(item: DiscussionPrompt) -> dict:
     }
 
 
+def _reading(row: dict) -> ReadingItem:
+    return ReadingItem(
+        id=row["id"],
+        kind=row["kind"],
+        genre=row["genre"],
+        title=row["title"],
+        paragraphs=tuple(row["paragraphs"]),
+        questions=tuple(
+            Question(**{**q, "options": tuple(q["options"])}) for q in row["questions"]
+        ),
+    )
+
+
+def _reading_row(item: ReadingItem) -> dict:
+    return {
+        "id": item.id,
+        "kind": item.kind,
+        "genre": item.genre,
+        "title": item.title,
+        "paragraphs": list(item.paragraphs),
+        "questions": [
+            {
+                "pattern": q.pattern,
+                "prompt": q.prompt,
+                "options": list(q.options),
+                "answer": q.answer,
+                "evidence": q.evidence,
+                "why": q.why,
+            }
+            for q in item.questions
+        ],
+    }
+
+
 # Por tipo: el archivo, de renglón a entidad y de entidad a renglón.
 _FILES: dict[str, tuple[str, Callable[[dict], Item], Callable]] = {
     SENTENCE: ("sentences.json", _sentence, _sentence_row),
     WORDS: ("words.json", _words, _words_row),
     EMAIL: ("emails.json", _email, _email_row),
     DISCUSSION: ("discussions.json", _discussion, _discussion_row),
+    DAILY: ("daily.json", _reading, _reading_row),
+    ACADEMIC: ("academic.json", _reading, _reading_row),
 }
 
 

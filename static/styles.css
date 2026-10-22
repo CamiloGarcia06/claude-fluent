@@ -2125,3 +2125,31 @@ h2 .rail-chip { margin-left: var(--s2); }
   color: var(--ink);
   white-space: pre-wrap;
 }
+
+/* TOEFL · reading */
+.toefl-passage { max-width: 72ch; }
+.toefl-para { font-size: 16px; line-height: 1.65; color: var(--ink); }
+.toefl-evidence { background: var(--present-dim); color: inherit; padding: 0 2px; border-radius: var(--r-sm); }
+.toefl-evidence[data-correct="false"] { background: var(--kraft-dim); }
+.toefl-evidence::before {
+  content: attr(data-q);
+  font-family: var(--mono); font-size: 11px; vertical-align: super;
+  margin-right: 2px; color: var(--ink-3);
+}
+.toefl-questions { max-width: 72ch; margin: var(--s5) 0 0; padding-left: var(--s5); }
+.toefl-q { margin-top: var(--s5); }
+.toefl-prompt { margin: 0 0 var(--s2); font-size: 16px; color: var(--ink); }
+.toefl-option {
+  display: flex; gap: var(--s2); align-items: baseline;
+  padding: var(--s1) var(--s2); border-radius: var(--r-sm);
+  font-size: 15px; color: var(--ink-2); cursor: pointer;
+}
+.toefl-option:hover { background: var(--paper-inset); }
+.toefl-option input { margin: 0; }
+.toefl-letter { font-family: var(--mono); font-size: 13px; color: var(--ink-3); }
+.toefl-option[data-state="right"] { background: var(--present-dim); color: var(--present); }
+.toefl-option[data-state="wrong"] { background: var(--kraft-dim); color: var(--kraft); text-decoration: line-through; }
+.toefl-q .toefl-why { margin: var(--s2) 0 0; line-height: 1.5; }
+.toefl-q .toefl-why .tag { margin-right: var(--s1); }
+.toefl-q[data-correct="false"] .toefl-why .tag { color: var(--kraft); }
+.toefl-slow { color: var(--kraft); }

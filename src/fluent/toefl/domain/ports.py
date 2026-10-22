@@ -5,9 +5,10 @@ from datetime import datetime
 from typing import Protocol
 
 from fluent.toefl.domain.entities import Attempt, SentenceItem, WordsItem
+from fluent.toefl.domain.reading import ReadingItem
 from fluent.toefl.domain.writing import DiscussionPrompt, EmailPrompt
 
-Item = SentenceItem | WordsItem | EmailPrompt | DiscussionPrompt
+Item = SentenceItem | WordsItem | EmailPrompt | DiscussionPrompt | ReadingItem
 
 
 class ItemBank(Protocol):
@@ -31,7 +32,8 @@ class AttemptLog(Protocol):
 
 
 class SubmissionLog(Protocol):
-    """Las entregas de writing con su corrección, para volver a leerlas."""
+    """Las entregas de writing con su corrección, para volver a leerlas, y las
+    lecturas con su nota y su tiempo."""
 
     def append(self, submission: dict) -> None: ...
 

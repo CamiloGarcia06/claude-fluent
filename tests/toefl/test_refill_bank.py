@@ -54,3 +54,18 @@ def test_refill_validates_kind_and_focus():
         RefillBank(FakeBank(), FakeGenerator())("essay")
     with pytest.raises(UnknownPattern):
         RefillBank(FakeBank(), FakeGenerator())("sentence", focus="connector")
+
+
+def test_refill_reading_rejects_invented_evidence():
+    from .fakes import MIRROR_TEXT, mirror_questions
+
+    good = {"genre": "biology", "title": "T", "text": MIRROR_TEXT, "questions": mirror_questions()}
+    invented = {
+        **good,
+        "questions": [{**q, "evidence": "not in the text"} for q in mirror_questions()],
+    }
+    generator = FakeGenerator(academic=[good, invented])
+    bank = FakeBank()
+    out = RefillBank(bank, generator)("academic", focus="inference")
+    assert out == {"added": 1, "rejected": 1, "duplicates": 0}
+    assert generator.calls == [("academic", BATCH["academic"], "inference")]

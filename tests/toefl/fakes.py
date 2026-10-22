@@ -7,6 +7,7 @@ from fluent.toefl.domain.entities import (
     build_sentence_item,
     build_words_item,
 )
+from fluent.toefl.domain.reading import ReadingItem, build_reading_item
 from fluent.toefl.domain.writing import build_discussion_prompt, build_email_prompt
 
 # El párrafo del Practice Test 1 de ETS: sus diez huecos son la respuesta oficial.
@@ -45,12 +46,16 @@ def words(text: str = ETS_PARAGRAPH) -> WordsItem:
 class FakeBank:
     """Un banco en memoria por tipo. `sentences=` y `words=` son atajos."""
 
-    def __init__(self, sentences=None, words=None, emails=None, discussions=None) -> None:
+    def __init__(
+        self, sentences=None, words=None, emails=None, discussions=None, daily=None, academic=None
+    ) -> None:
         self.stored: dict[str, list] = {
             "sentence": list(sentences or []),
             "words": list(words or []),
             "email": list(emails or []),
             "discussion": list(discussions or []),
+            "daily": list(daily or []),
+            "academic": list(academic or []),
         }
 
     def items(self, kind):
@@ -137,3 +142,85 @@ def discussion_prompt():
             {"name": "Andrew", "text": "No, students already have limited free time."},
         ],
     )
+
+
+# "The Mirror Test", del Practice Test 1 de ETS, con cuatro de sus preguntas.
+MIRROR_TEXT = (
+    "Very young children cannot recognize themselves in a mirror; they usually achieve "
+    "this milestone around 18 months of age. The ability to recognize oneself in the "
+    "mirror is considered to be a key component of self-awareness and consciousness for "
+    "humans. But what about animals?\n\n"
+    "For many years, scientists have known that members of the great ape family could "
+    "recognize themselves in mirrors. They measured this by the mirror test, which "
+    "involved putting a colored mark on an ape's body, and then showing the ape its "
+    "reflection in a mirror. If the ape tried to remove the mark on its own body, the "
+    "scientists knew that the ape was recognizing its reflection.\n\n"
+    "Apes are close relatives of humans, but in recent years, scientists have discovered "
+    "that other animals also pass the mirror test. Elephants and dolphins have shown "
+    "signs of self-recognition. In a more recent experiment, a type of fish called the "
+    "cleaner fish tried to scrape a mark off its body when it saw itself in the mirror. "
+    "This suggests that even less intelligent animals may possess more self-awareness "
+    "than previously suspected."
+)
+
+
+def mirror_questions() -> list[dict]:
+    return [
+        {
+            "pattern": "main_idea",
+            "prompt": "What is the passage mainly about?",
+            "options": [
+                "Stages of early childhood development",
+                "Research on animal cognition",
+                "Differences between apes, elephants, and dolphins",
+                "Recent experiments on fish",
+            ],
+            "answer": 1,
+            "evidence": "other animals also pass the mirror test",
+            "why": "Los tres párrafos hablan de animales que se reconocen.",
+        },
+        {
+            "pattern": "word_meaning",
+            "prompt": 'The word "milestone" is closest in meaning to',
+            "options": ["accomplishment", "distance", "weight", "discovery"],
+            "answer": 0,
+            "evidence": "they usually achieve this milestone around 18 months of age",
+            "why": "Se logra (achieve) a cierta edad: es un logro.",
+        },
+        {
+            "pattern": "detail",
+            "prompt": "Why did scientists put colored marks on animals' bodies?",
+            "options": [
+                "To track the animals' movements",
+                "To determine whether the animals recognized themselves",
+                "To tell the animals apart",
+                "To test whether animals see colors",
+            ],
+            "answer": 1,
+            "evidence": "the scientists knew that the ape was recognizing its reflection",
+            "why": "La marca servía para ver si el animal se reconocía.",
+        },
+        {
+            "pattern": "author_purpose",
+            "prompt": "Why does the author mention cleaner fish?",
+            "options": [
+                "To suggest that many animals may possess self-awareness",
+                "To imply that ocean animals are highly intelligent",
+                "To show a flaw in a recent experiment",
+                "To give an example of an animal that does not recognize itself",
+            ],
+            "answer": 0,
+            "evidence": "even less intelligent animals may possess more self-awareness",
+            "why": "El pez es el ejemplo de que hasta animales menos inteligentes se reconocen.",
+        },
+    ]
+
+
+def mirror(questions=None) -> ReadingItem:
+    return build_reading_item(
+        "academic", "biology", "The Mirror Test", MIRROR_TEXT, questions or mirror_questions()
+    )
+
+
+def right_answers(item: ReadingItem) -> list[int]:
+    return [q.answer for q in item.questions]

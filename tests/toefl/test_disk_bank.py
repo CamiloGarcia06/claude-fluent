@@ -53,3 +53,13 @@ def test_writing_prompts_and_submissions_round_trip(tmp_path):
         subs.append({"kind": "email" if i % 2 else "discussion", "score": i})
     rows = subs.recent("email") + subs.recent("discussion")
     assert len(rows) == MAX_SUBMISSIONS and all(r["score"] >= 3 for r in rows)
+
+
+def test_reading_items_round_trip(tmp_path):
+    from .fakes import mirror
+
+    bank = DiskBank(tmp_path)
+    assert bank.add("academic", [mirror()]) == 1
+    assert bank.add("academic", [mirror()]) == 0
+    assert bank.items("academic") == [mirror()]
+    assert bank.items("daily") == []

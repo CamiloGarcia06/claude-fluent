@@ -31,3 +31,18 @@ def test_generator_translates_model_errors():
 
     with pytest.raises(ModelFailed):
         LlmGenerator(broken).generate("email", 3, None)
+
+
+def test_reading_prompt_carries_question_types_and_focus():
+    prompts = []
+
+    def generate(prompt, schema, system=""):
+        prompts.append(prompt)
+        return {"texts": [{"title": "t"}, "junk"]}, 10
+
+    rows = LlmGenerator(generate).generate("academic", 2, "inference")
+    assert rows == [{"title": "t"}]
+    assert "Write 2" in prompts[0] and "The Mirror Test" in prompts[0]
+    assert "negative_fact" in prompts[0] and "Focus: at least half" in prompts[0]
+    LlmGenerator(generate).generate("daily", 4, None)
+    assert "Municipal Charter" in prompts[1] and "Mix the patterns" in prompts[1]

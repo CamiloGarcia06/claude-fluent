@@ -25,3 +25,24 @@ def test_overview_shows_the_last_writing_scores():
     out = GetOverview(FakeBank(), FakeLog(), subs)()
     assert [r["score"] for r in out["email"]["recent"]] == [3, 4, 5, 0, 1]
     assert out["discussion"]["recent"] == [] and "recent" not in out["sentence"]
+
+
+def test_overview_shows_the_last_reading_scores_and_times():
+    subs = FakeSubmissions(
+        [
+            {
+                "kind": "daily",
+                "at": "t",
+                "score": 2,
+                "total": 3,
+                "seconds": 150,
+                "target_seconds": 130,
+            }
+        ]
+    )
+    out = GetOverview(FakeBank(), FakeLog(), subs)()
+    assert out["daily"]["recent"] == [
+        {"at": "t", "score": 2, "total": 3, "seconds": 150, "target_seconds": 130}
+    ]
+    assert out["academic"]["recent"] == []
+    assert [p["key"] for p in out["academic"]["patterns"]][0] == "main_idea"

@@ -1,7 +1,8 @@
 // TOEFL — entrenar las tareas de reading y writing del iBT de enero 2026, que
 // son las dos habilidades más flojas: Build a Sentence y Complete the Words
-// (cerradas) y el email y la discusión académica (con rúbrica, en
-// toefl-writing.js).
+// (cerradas), las lecturas con preguntas (en toefl-reading.js) y el email y la
+// discusión académica (con rúbrica, en toefl-writing.js). Las pestañas van en
+// el orden de las secciones del examen: primero reading, después writing.
 //
 // Practicar las cerradas no llama al modelo: el banco está en disco y la corrección es texto
 // contra texto, así que responde al instante. El modelo sólo entra al rellenar
@@ -12,16 +13,19 @@
 // historia: es lo que cambia cuando mejorás.
 
 import { $, el, getJSON, ApiError, emptyRow, row, waiting, working } from "/ui.js";
+import * as reading from "/views/toefl-reading.js";
 import * as writing from "/views/toefl-writing.js";
 
-// Medido el 22-10 contra claude -p: ocho frases 27 s, tres párrafos 23 s.
-const REFILL_ESTIMATE_MS = 25000;
-
+// Medido el 22-10 contra claude -p: ocho frases 27 s, tres párrafos 23 s,
+// tres enunciados de writing 9-16 s, cuatro textos cotidianos 50-72 s y dos
+// académicos 54-64 s.
 const TABS = [
-  { kind: "sentence", label: "Build a Sentence", batch: "8 frases" },
-  { kind: "words", label: "Complete the Words", batch: "3 párrafos" },
-  { kind: "email", label: "Email", batch: "3 enunciados", writing: true },
-  { kind: "discussion", label: "Academic Discussion", batch: "3 enunciados", writing: true },
+  { kind: "words", label: "Complete the Words", batch: "3 párrafos", estimate: 25000 },
+  { kind: "daily", label: "Daily Life", batch: "4 textos", estimate: 65000, reading: true },
+  { kind: "academic", label: "Academic Passage", batch: "2 textos", estimate: 60000, reading: true },
+  { kind: "sentence", label: "Build a Sentence", batch: "8 frases", estimate: 27000 },
+  { kind: "email", label: "Email", batch: "3 enunciados", estimate: 15000, writing: true },
+  { kind: "discussion", label: "Academic Discussion", batch: "3 enunciados", estimate: 15000, writing: true },
 ];
 
 const MARKUP = `
@@ -53,7 +57,7 @@ const MARKUP = `
 </div>
 `;
 
-let kind = "sentence";
+let kind = "words";
 let overview = null;
 let current = null;
 
@@ -76,13 +80,19 @@ function paintHeader() {
       "Con unos cuantos intentos por patrón te digo dónde estás perdiendo puntos. " +
       "Hasta entonces, practicá: no hace falta que te salga bien.";
   }
-  if (data.recent?.length) {
+  if (data.recent?.length && tab().reading) {
+    const pace = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    const reads = data.recent
+      .map((r) => `${r.score}/${r.total}` + (r.seconds ? ` en ${pace(r.seconds)}` : ""))
+      .join(" · ");
+    $("toefl-tip").textContent += ` Tus últimas lecturas: ${reads}.`;
+  } else if (data.recent?.length) {
     const scores = data.recent.map((r) => r.score).join(" · ");
     $("toefl-tip").textContent += ` Tus últimas notas: ${scores} (de 5).`;
   }
   $("toefl-window").textContent = tab().writing
     ? "últimas 10 entregas"
-    : "últimos 10 intentos de cada uno";
+    : tab().reading ? "últimas 10 preguntas de cada tipo" : "últimos 10 intentos de cada uno";
 
   const bar = $("toefl-tabs");
   bar.replaceChildren();
@@ -113,7 +123,8 @@ function paintEmpty(message) {
   $("toefl-meta").textContent = "";
   const body = $("toefl-body");
   body.replaceChildren(el("p", "panel-note",
-    message || `Genero ${tab().batch} nuevos con claude -p (unos 25 s). ` +
+    message || `Genero ${tab().batch} nuevos con claude -p ` +
+    `(unos ${Math.round(tab().estimate / 1000)} s). ` +
     (tab().writing
       ? "Cada uno es una situación distinta."
       : focus ? "Van cargados hacia tu punto débil." : "Van mezclando todos los patrones.")));
@@ -128,7 +139,7 @@ function paintEmpty(message) {
 
 async function refill(button, focus) {
   working(button, true);
-  const stop = waiting($("toefl-body"), REFILL_ESTIMATE_MS);
+  const stop = waiting($("toefl-body"), tab().estimate);
   try {
     const out = await getJSON("/api/toefl/refill", {
       method: "POST",
@@ -314,8 +325,8 @@ async function load() {
   }
   const out = await getJSON(`/api/toefl/next/${kind}`);
   current = out.item;
-  if (tab().writing) {
-    writing.paint(current, { next: load, done: refreshHeader });
+  if (tab().writing || tab().reading) {
+    (tab().writing ? writing : reading).paint(current, { next: load, done: refreshHeader });
     return;
   }
   $("toefl-meta").textContent = `quedan ${out.fresh} sin hacer`;
@@ -324,7 +335,7 @@ async function load() {
 }
 
 export async function render(root, params) {
-  kind = TABS.some((t) => t.kind === params[0]) ? params[0] : "sentence";
+  kind = TABS.some((t) => t.kind === params[0]) ? params[0] : "words";
   root.innerHTML = MARKUP;
   current = null;
   if (!overview) $("toefl-rows").append(emptyRow("Leyendo tus intentos…"));

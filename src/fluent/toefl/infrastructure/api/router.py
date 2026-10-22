@@ -34,6 +34,13 @@ def toefl_submit(payload: dict, uc: ToeflUseCases = Depends(get_toefl)) -> dict:
     )
 
 
+@router.post("/read")
+def toefl_read(payload: dict, uc: ToeflUseCases = Depends(get_toefl)) -> dict:
+    return uc.read(
+        payload.get("kind"), payload.get("item_id"), payload.get("answers"), payload.get("seconds")
+    )
+
+
 @router.post("/refill")
 def toefl_refill(payload: dict, uc: ToeflUseCases = Depends(get_toefl)) -> dict:
     return uc.refill(payload.get("kind"), payload.get("focus"))
