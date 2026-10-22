@@ -53,11 +53,18 @@ explicitly, and it is the first thing to check when anything looks wrong.
 
 ## Current status
 
-Nine screens navigate: Hoy, Progreso, the five skill libraries, Mazos, Agregar,
-Atascos, Ajustes and Dashboard. Card generation works end to end — propose
+Ten screens navigate: Hoy, Progreso, the five skill libraries, Mazos, Agregar,
+Atascos, Ajustes, Dashboard and TOEFL. Card generation works end to end — propose
 terms, three candidates each, edit in place, pick a deck, write with a creation
 record. The syllabus of a level reads on the skill screens: what the level is
 made of, and how much of it your decks cover.
+
+TOEFL (`#/toefl`) trains the two iBT tasks (January 2026 format) that pay most
+per hour: Build a Sentence and Complete the Words. `claude -p` only fills the
+bank in `data/toefl/` (~25 s a batch); practising and grading never call the
+model. The advice comes from the last 10 attempts of each pattern, and the next
+exercise starts with the weakest one. Writing (email, academic discussion) is
+the next phase.
 
 Not built: rename/archive on Mazos and the exercise mode.
 (Update this section after each phase.)

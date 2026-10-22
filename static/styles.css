@@ -1995,3 +1995,84 @@ h2 .rail-chip { margin-left: var(--s2); }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* ── TOEFL ─────────────────────────────────────────────────────────────
+   Las piezas puestas usan el azul de "presente": son tu respuesta en curso.
+   El error va en kraft y no en rojo, por lo mismo que Atascos — el rojo es
+   de las fallas del sistema, y equivocarse acá es el trabajo. */
+#toefl-tabs { grid-column: 1 / -1; }
+#toefl-tabs a { text-decoration: none; }
+
+.toefl-context {
+  margin: var(--s4) 0 0;
+  font-size: 15px;
+  color: var(--ink-3);
+}
+.toefl-context::before { content: "— "; }
+
+.toefl-sentence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  margin: var(--s4) 0 0;
+  min-height: 40px;
+  font-size: 17px;
+  color: var(--ink);
+}
+.toefl-fixed { padding: var(--s2) 0; }
+.toefl-slot {
+  min-width: 56px;
+  height: 30px;
+  border-bottom: 1px dashed var(--rule);
+}
+.toefl-chunk {
+  font: 500 15px/1 var(--font);
+  color: var(--present);
+  background: var(--present-dim);
+  border: 1px solid var(--rule-blue);
+  border-radius: var(--r-rough-alt);
+  padding: var(--s2) var(--s3);
+  cursor: pointer;
+}
+.toefl-pool { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s5); }
+.toefl-pool .chip { font-size: 15px; color: var(--ink-2); }
+
+.toefl-paragraph {
+  margin: var(--s4) 0 0;
+  font-size: 17px;
+  line-height: 2.1;
+  color: var(--ink);
+  max-width: 72ch;
+}
+.toefl-gap { white-space: nowrap; }
+.toefl-gap input {
+  font: 500 16px/1.2 var(--mono);
+  color: var(--present);
+  background: var(--paper-inset);
+  border: none;
+  border-bottom: 1px solid var(--rule-blue);
+  padding: 0 2px;
+  margin-left: 1px;
+}
+.toefl-gap input:focus { outline: none; border-bottom-color: var(--present); }
+.toefl-gap[data-state="right"] input { color: var(--present); background: transparent; }
+.toefl-gap[data-state="wrong"] input {
+  color: var(--kraft);
+  background: transparent;
+  text-decoration: line-through;
+}
+.toefl-fix { font-family: var(--mono); font-size: 15px; color: var(--present); margin-left: var(--s1); }
+
+.toefl-verdict { margin: var(--s5) 0 0; font-size: 20px; color: var(--present); }
+.toefl-verdict.toefl-wrong { color: var(--kraft); }
+.toefl-answer { margin: var(--s2) 0 0; font-size: 16px; color: var(--ink); }
+.toefl-tip {
+  margin-top: var(--s4);
+  padding: var(--s4);
+  background: var(--kraft-dim);
+  border-radius: var(--r-rough);
+  max-width: 72ch;
+}
+.toefl-tip p { margin: var(--s2) 0 0; font-size: 15px; line-height: 1.55; color: var(--ink-2); }
+.toefl-tip .toefl-example { font-family: var(--mono); font-size: 13px; color: var(--ink-3); }

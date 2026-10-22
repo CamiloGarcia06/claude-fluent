@@ -18,6 +18,7 @@ import * as dashboard from "/views/dashboard.js";
 import * as add from "/views/add.js";
 import * as practice from "/views/practice.js";
 import * as patterns from "/views/patterns.js";
+import * as toefl from "/views/toefl.js";
 
 const ROUTES = {
   hoy: today,
@@ -27,6 +28,7 @@ const ROUTES = {
   agregar: add,
   practica: practice,
   patrones: patterns,
+  toefl,
   atascos: stuck,
   ajustes: settings,
   dashboard,
