@@ -30,3 +30,20 @@ class NothingGenerated(Upstream):
 
 class ModelFailed(Upstream):
     code = "model_failed"
+
+
+class NoText(Invalid):
+    code = "no_text"
+    message = "no escribiste nada"
+
+
+class TextTooLong(Invalid):
+    code = "text_too_long"
+    message = "el texto es demasiado largo"
+
+
+class BadFeedback(Upstream):
+    """El corrector respondió, pero no con una corrección que se pueda creer."""
+
+    code = "bad_feedback"
+    message = "el corrector devolvió una nota que no sirve; probá de nuevo"

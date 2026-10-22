@@ -1,5 +1,6 @@
 """Los patrones del TOEFL iBT (formato del 21-01-2026) que se entrenan, con el
-consejo que acompaña a cada uno.
+consejo que acompaña a cada uno: los de los dos ejercicios cerrados y los
+criterios de la rúbrica de writing.
 
 **El consejo es texto fijo, no una llamada al modelo.** Fallar una pregunta
 indirecta siempre se explica igual: el orden vuelve a ser el de una afirmación.
@@ -15,7 +16,12 @@ from typing import NamedTuple
 
 SENTENCE = "sentence"
 WORDS = "words"
-KINDS = (SENTENCE, WORDS)
+EMAIL = "email"
+DISCUSSION = "discussion"
+# Los que se corrigen texto contra texto, y los que corrige el modelo con rúbrica.
+OBJECTIVE_KINDS = (SENTENCE, WORDS)
+WRITING_KINDS = (EMAIL, DISCUSSION)
+KINDS = OBJECTIVE_KINDS + WRITING_KINDS
 
 
 class Pattern(NamedTuple):
@@ -108,12 +114,79 @@ WORD_PATTERNS = (
     ),
 )
 
-PATTERNS = {SENTENCE: SENTENCE_PATTERNS, WORDS: WORD_PATTERNS}
+# Writing: lo que mira la rúbrica de ETS, partido en lo que se puede corregir.
+# Un criterio "falla" en una entrega cuando el corrector lo marca o cuando hay
+# una corrección de esa categoría; así el consejo se calcula igual que en los
+# ejercicios cerrados, con una entrega como un intento.
+WRITING_PATTERNS = (
+    Pattern(
+        "task_completion",
+        "Cumplir la tarea",
+        "La nota se cae primero por lo que falta, no por lo que está mal: en el email, "
+        "un párrafo por viñeta y en su orden; en la discusión, tu opinión en la primera frase.",
+        "Dear …, I'm writing because… [viñeta 1]. However, … [viñeta 2]. Could you…? [viñeta 3]",
+    ),
+    Pattern(
+        "development",
+        "Desarrollo",
+        "Cada idea necesita su porqué y un ejemplo concreto. En la discusión, mínimo 100 "
+        "palabras: opinión, dos razones, un ejemplo personal y una frase sobre otro estudiante.",
+        "For example, when I… · This matters because…",
+    ),
+    Pattern(
+        "organization",
+        "Organización",
+        "Conectores que digan qué relación hay entre las frases: first, also, however, "
+        "for example, as a result. Una idea por oración.",
+        "First, … Also, … However, … As a result, …",
+    ),
+    Pattern(
+        "grammar",
+        "Gramática",
+        "Tiempos verbales, concordancia y el sujeto que en español se omite. Releé cada "
+        "oración buscando su sujeto y su verbo antes de entregar.",
+        "Is important → It is important · he go → he goes",
+    ),
+    Pattern(
+        "vocabulary",
+        "Vocabulario",
+        "Una palabra precisa vale más que tres vagas: cambiá thing, good y very por la "
+        "palabra exacta, y cuidado con los falsos amigos.",
+        "actually ≠ actualmente · a very big problem → a serious problem",
+    ),
+    Pattern(
+        "mechanics",
+        "Ortografía y puntuación",
+        "Mayúscula al empezar y en I, coma después de los conectores iniciales y punto "
+        "al final. Son puntos que se pierden por apuro.",
+        "However, … · i think → I think",
+    ),
+    Pattern(
+        "register",
+        "Tono",
+        "El email es a alguien que no conocés: saludo y despedida formales, could you / "
+        "I would like, nada de wanna ni abreviaturas.",
+        "I want → I would like · Hi! → Dear Editor,",
+    ),
+)
+
+PATTERNS = {
+    SENTENCE: SENTENCE_PATTERNS,
+    WORDS: WORD_PATTERNS,
+    EMAIL: WRITING_PATTERNS,
+    DISCUSSION: WRITING_PATTERNS,
+}
 _BY_KEY = {p.key: p for group in PATTERNS.values() for p in group}
 
 
 def pattern(key: str) -> Pattern | None:
     return _BY_KEY.get(key)
+
+
+def tip_card(key: str) -> dict:
+    """El consejo de un patrón tal como lo muestra la pantalla."""
+    info = _BY_KEY[key]
+    return {"key": key, "label": info.label, "tip": info.tip, "example": info.example}
 
 
 def keys(kind: str) -> tuple[str, ...]:

@@ -23,6 +23,17 @@ def toefl_grade(payload: dict, uc: ToeflUseCases = Depends(get_toefl)) -> dict:
     return uc.grade(payload.get("kind"), payload.get("item_id"), payload.get("answer"))
 
 
+@router.post("/submit")
+def toefl_submit(payload: dict, uc: ToeflUseCases = Depends(get_toefl)) -> dict:
+    return uc.submit(
+        payload.get("kind"),
+        payload.get("item_id"),
+        payload.get("text"),
+        payload.get("seconds"),
+        payload.get("revision", False),
+    )
+
+
 @router.post("/refill")
 def toefl_refill(payload: dict, uc: ToeflUseCases = Depends(get_toefl)) -> dict:
     return uc.refill(payload.get("kind"), payload.get("focus"))

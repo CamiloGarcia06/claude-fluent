@@ -1,7 +1,9 @@
-// TOEFL — entrenar las dos tareas que más puntos dan por hora de estudio:
-// Build a Sentence y Complete the Words, con el formato del iBT de enero 2026.
+// TOEFL — entrenar las tareas de reading y writing del iBT de enero 2026, que
+// son las dos habilidades más flojas: Build a Sentence y Complete the Words
+// (cerradas) y el email y la discusión académica (con rúbrica, en
+// toefl-writing.js).
 //
-// Practicar no llama al modelo: el banco está en disco y la corrección es texto
+// Practicar las cerradas no llama al modelo: el banco está en disco y la corrección es texto
 // contra texto, así que responde al instante. El modelo sólo entra al rellenar
 // el banco, y la barra de espera ocupa el lugar donde va a aparecer el
 // ejercicio nuevo.
@@ -10,6 +12,7 @@
 // historia: es lo que cambia cuando mejorás.
 
 import { $, el, getJSON, ApiError, emptyRow, row, waiting, working } from "/ui.js";
+import * as writing from "/views/toefl-writing.js";
 
 // Medido el 22-10 contra claude -p: ocho frases 27 s, tres párrafos 23 s.
 const REFILL_ESTIMATE_MS = 25000;
@@ -17,6 +20,8 @@ const REFILL_ESTIMATE_MS = 25000;
 const TABS = [
   { kind: "sentence", label: "Build a Sentence", batch: "8 frases" },
   { kind: "words", label: "Complete the Words", batch: "3 párrafos" },
+  { kind: "email", label: "Email", batch: "3 enunciados", writing: true },
+  { kind: "discussion", label: "Academic Discussion", batch: "3 enunciados", writing: true },
 ];
 
 const MARKUP = `
@@ -41,7 +46,7 @@ const MARKUP = `
   <section class="panel">
     <div class="panel-head">
       <h2>Cómo vienen tus patrones</h2>
-      <span class="sub">últimos 10 intentos de cada uno</span>
+      <span class="sub" id="toefl-window"></span>
     </div>
     <ul id="toefl-rows" class="rows"></ul>
   </section>
@@ -61,15 +66,23 @@ function paintHeader() {
   const focus = data.patterns.find((p) => p.key === data.focus);
   if (focus) {
     $("toefl-headline").textContent = `Tu punto débil: ${focus.label.toLowerCase()}`;
-    $("toefl-tip").textContent =
-      `${focus.misses} de ${focus.tries} mal en los últimos intentos. ${focus.tip} ` +
-      "Los próximos ejercicios van primero por ahí.";
+    $("toefl-tip").textContent = tab().writing
+      ? `Falló en ${focus.misses} de tus últimas ${focus.tries} entregas. ${focus.tip}`
+      : `${focus.misses} de ${focus.tries} mal en los últimos intentos. ${focus.tip} ` +
+        "Los próximos ejercicios van primero por ahí.";
   } else {
     $("toefl-headline").textContent = tab().label;
     $("toefl-tip").textContent =
       "Con unos cuantos intentos por patrón te digo dónde estás perdiendo puntos. " +
       "Hasta entonces, practicá: no hace falta que te salga bien.";
   }
+  if (data.recent?.length) {
+    const scores = data.recent.map((r) => r.score).join(" · ");
+    $("toefl-tip").textContent += ` Tus últimas notas: ${scores} (de 5).`;
+  }
+  $("toefl-window").textContent = tab().writing
+    ? "últimas 10 entregas"
+    : "últimos 10 intentos de cada uno";
 
   const bar = $("toefl-tabs");
   bar.replaceChildren();
@@ -83,7 +96,9 @@ function paintHeader() {
   const list = $("toefl-rows");
   list.replaceChildren();
   for (const p of data.patterns) {
-    const count = p.tries ? `${p.misses} de ${p.tries} mal` : "sin intentos";
+    const count = !p.tries
+      ? "sin intentos"
+      : tab().writing ? `falló en ${p.misses} de ${p.tries}` : `${p.misses} de ${p.tries} mal`;
     const li = row(p.label, count);
     if (p.key === data.focus) li.querySelector(".name").append(el("span", "tag", " · foco"));
     list.append(li);
@@ -99,7 +114,9 @@ function paintEmpty(message) {
   const body = $("toefl-body");
   body.replaceChildren(el("p", "panel-note",
     message || `Genero ${tab().batch} nuevos con claude -p (unos 25 s). ` +
-    (focus ? "Van cargados hacia tu punto débil." : "Van mezclando todos los patrones.")));
+    (tab().writing
+      ? "Cada uno es una situación distinta."
+      : focus ? "Van cargados hacia tu punto débil." : "Van mezclando todos los patrones.")));
   $("toefl-result").replaceChildren();
 
   const actions = $("toefl-actions");
@@ -181,7 +198,7 @@ function sentenceResult(out) {
   box.append(el("p", out.correct ? "toefl-verdict" : "toefl-verdict toefl-wrong",
     out.correct ? "Correcto" : "No era así"));
   box.append(el("p", "toefl-answer", out.sentence));
-  if (!out.correct) box.append(tipCard(out.tip));
+  if (!out.correct) box.append(writing.tipCard(out.tip));
 }
 
 // ── Complete the Words ────────────────────────────────────────────────
@@ -236,16 +253,11 @@ function wordsResult(out, inputs) {
   const box = $("toefl-result");
   box.replaceChildren(el("p", out.score === out.total ? "toefl-verdict" : "toefl-verdict toefl-wrong",
     `${out.score} de ${out.total}`));
-  for (const tip of out.tips) box.append(tipCard(tip));
+  for (const tip of out.tips) box.append(writing.tipCard(tip));
 }
 
 // ── Común ─────────────────────────────────────────────────────────────
 
-function tipCard(tip) {
-  const card = el("div", "toefl-tip");
-  card.append(el("span", "tag", tip.label), el("p", "", tip.tip), el("p", "toefl-example", tip.example));
-  return card;
-}
 
 async function grade(answer, inputs) {
   const check = $("toefl-actions").querySelector("button");
@@ -276,13 +288,17 @@ async function grade(answer, inputs) {
   $("toefl-actions").replaceChildren(next);
   next.focus();
 
-  // El intento ya cuenta: la cabecera y los patrones lo muestran sin esperar
-  // al siguiente ejercicio. Si esta lectura falla, el resultado ya está en
-  // pantalla y la próxima carga lo arregla.
+  await refreshHeader();
+  $("toefl-meta").textContent = `quedan ${overview[kind].fresh} sin hacer`;
+}
+
+// El intento ya cuenta: la cabecera y los patrones lo muestran sin esperar al
+// siguiente ejercicio. Si esta lectura falla, el resultado ya está en pantalla
+// y la próxima carga lo arregla.
+async function refreshHeader() {
   try {
     overview = await getJSON("/api/toefl/overview");
     paintHeader();
-    $("toefl-meta").textContent = `quedan ${overview[kind].fresh} sin hacer`;
   } catch (error) {
     if (!(error instanceof ApiError)) throw error;
   }
@@ -298,6 +314,10 @@ async function load() {
   }
   const out = await getJSON(`/api/toefl/next/${kind}`);
   current = out.item;
+  if (tab().writing) {
+    writing.paint(current, { next: load, done: refreshHeader });
+    return;
+  }
   $("toefl-meta").textContent = `quedan ${out.fresh} sin hacer`;
   if (kind === "sentence") paintSentence(current);
   else paintWords(current);

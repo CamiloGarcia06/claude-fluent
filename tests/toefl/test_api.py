@@ -14,8 +14,8 @@ def test_toefl_round_trip_without_anki_or_model():
     assert c.get("/api/toefl/next/essay").status_code == 400
 
     bank = DiskBank()  # el mismo data/toefl/ de la raíz temporal que usa el app
-    bank.add_sentences([sentence()])
-    bank.add_words([words()])
+    bank.add("sentence", [sentence()])
+    bank.add("words", [words()])
 
     overview = c.get("/api/toefl/overview").json()
     assert overview["sentence"]["fresh"] == 1 and overview["words"]["fresh"] == 1

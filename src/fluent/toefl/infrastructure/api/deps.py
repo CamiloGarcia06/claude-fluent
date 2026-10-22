@@ -6,6 +6,7 @@ from fluent.toefl.application.get_overview import GetOverview
 from fluent.toefl.application.grade_attempt import GradeAttempt
 from fluent.toefl.application.next_item import NextItem
 from fluent.toefl.application.refill_bank import RefillBank
+from fluent.toefl.application.submit_writing import SubmitWriting
 
 
 @dataclass(frozen=True)
@@ -14,6 +15,7 @@ class ToeflUseCases:
     next_item: NextItem
     grade: GradeAttempt
     refill: RefillBank
+    submit: SubmitWriting
 
 
 def get_toefl(request: Request) -> ToeflUseCases:

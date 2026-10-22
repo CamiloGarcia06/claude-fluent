@@ -52,10 +52,12 @@ from fluent.toefl.application.get_overview import GetOverview
 from fluent.toefl.application.grade_attempt import GradeAttempt
 from fluent.toefl.application.next_item import NextItem
 from fluent.toefl.application.refill_bank import RefillBank
+from fluent.toefl.application.submit_writing import SubmitWriting
 from fluent.toefl.infrastructure.api.deps import ToeflUseCases
 from fluent.toefl.infrastructure.api.router import router as toefl_router
-from fluent.toefl.infrastructure.disk_bank import DiskAttempts, DiskBank
+from fluent.toefl.infrastructure.disk_bank import DiskAttempts, DiskBank, DiskSubmissions
 from fluent.toefl.infrastructure.llm_generator import LlmGenerator
+from fluent.toefl.infrastructure.llm_grader import LlmGrader
 from fluent.writing.application.answer_turn import AnswerTurn
 from fluent.writing.application.close_session import CloseSession
 from fluent.writing.application.get_patterns import GetPatterns
@@ -98,6 +100,7 @@ def build_app() -> FastAPI:
     cards_store = AnkiCardStore(anki, snapshots)
     toefl_bank = DiskBank()
     toefl_log = DiskAttempts()
+    toefl_submissions = DiskSubmissions()
 
     # ---- casos de uso por funcionalidad
     settings = SettingsUseCases(read=ReadSettings(state), write=WriteSettings(state))
@@ -133,10 +136,11 @@ def build_app() -> FastAPI:
         mark_pattern=MarkPattern(patterns),
     )
     toefl = ToeflUseCases(
-        overview=GetOverview(toefl_bank, toefl_log),
+        overview=GetOverview(toefl_bank, toefl_log, toefl_submissions),
         next_item=NextItem(toefl_bank, toefl_log),
         grade=GradeAttempt(toefl_bank, toefl_log, clock),
         refill=RefillBank(toefl_bank, LlmGenerator(generate)),
+        submit=SubmitWriting(toefl_bank, LlmGrader(generate), toefl_log, toefl_submissions, clock),
     )
 
     app = FastAPI(title="claude-fluent")

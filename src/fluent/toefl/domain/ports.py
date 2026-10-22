@@ -1,22 +1,24 @@
-"""Lo que el entrenamiento del TOEFL necesita de fuera: el banco y los intentos
-en disco, el modelo que genera ejercicios y el reloj."""
+"""Lo que el entrenamiento del TOEFL necesita de fuera: el banco, los intentos y
+las entregas en disco, el modelo que genera y el que corrige, y el reloj."""
 
 from datetime import datetime
 from typing import Protocol
 
 from fluent.toefl.domain.entities import Attempt, SentenceItem, WordsItem
+from fluent.toefl.domain.writing import DiscussionPrompt, EmailPrompt
+
+Item = SentenceItem | WordsItem | EmailPrompt | DiscussionPrompt
 
 
 class ItemBank(Protocol):
-    def sentences(self) -> list[SentenceItem]: ...
+    """Un banco por tipo (`catalog.KINDS`). Los ejercicios salen en el orden en
+    que entraron: el primero es el más viejo."""
 
-    def words(self) -> list[WordsItem]: ...
+    def items(self, kind: str) -> list[Item]: ...
 
-    def add_sentences(self, items: list[SentenceItem]) -> int:
+    def add(self, kind: str, items: list[Item]) -> int:
         """Guarda los que no estaban (por id) y devuelve cuántos entraron."""
         ...
-
-    def add_words(self, items: list[WordsItem]) -> int: ...
 
 
 class AttemptLog(Protocol):
@@ -28,12 +30,27 @@ class AttemptLog(Protocol):
         ...
 
 
+class SubmissionLog(Protocol):
+    """Las entregas de writing con su corrección, para volver a leerlas."""
+
+    def append(self, submission: dict) -> None: ...
+
+    def recent(self, kind: str) -> list[dict]:
+        """Las últimas de ese tipo, la más nueva al final."""
+        ...
+
+
 class ItemGenerator(Protocol):
     """Lo que devuelve es no confiable: dicts crudos que el caso de uso valida."""
 
-    def sentences(self, count: int, focus: str | None) -> list[dict]: ...
+    def generate(self, kind: str, count: int, focus: str | None) -> list[dict]: ...
 
-    def paragraphs(self, count: int, focus: str | None) -> list[dict]: ...
+
+class Grader(Protocol):
+    """Corrige un texto de writing con la rúbrica. Devuelve el dict crudo del
+    modelo; `writing.build_feedback` lo valida."""
+
+    def grade(self, kind: str, brief: str, text: str) -> dict: ...
 
 
 class Clock(Protocol):

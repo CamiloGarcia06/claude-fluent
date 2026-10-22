@@ -2076,3 +2076,52 @@ h2 .rail-chip { margin-left: var(--s2); }
 }
 .toefl-tip p { margin: var(--s2) 0 0; font-size: 15px; line-height: 1.55; color: var(--ink-2); }
 .toefl-tip .toefl-example { font-family: var(--mono); font-size: 13px; color: var(--ink-3); }
+
+/* Writing: el enunciado se lee como el del examen, el texto en la caja de
+   siempre, y la corrección baja en el orden en que se usa — nota, por qué,
+   criterio por criterio, correcciones, cómo se vería un 5. */
+#toefl-result .foot-msg { text-align: left; margin-top: var(--s4); }
+#toefl-meta[data-urgent="true"] { color: var(--kraft); }
+
+.toefl-brief {
+  margin-top: var(--s4);
+  padding: var(--s4) var(--s5);
+  background: var(--paper-inset);
+  border-radius: var(--r-rough);
+  max-width: 72ch;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.toefl-brief p { margin: var(--s2) 0 0; }
+.toefl-brief p:first-child { margin-top: 0; }
+.toefl-bullets { margin: var(--s1) 0 0; padding-left: var(--s5); }
+.toefl-label {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
+.toefl-mail { font-family: var(--mono); font-size: 13px; color: var(--ink-2); }
+.toefl-post { padding-top: var(--s2); border-top: 1px solid var(--rule-faint); }
+
+.toefl-text { max-width: 72ch; min-height: 220px; resize: vertical; }
+.toefl-count { margin: var(--s2) 0 0; font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+.toefl-count[data-short="true"] { color: var(--kraft); }
+
+.toefl-criteria li { align-items: baseline; gap: var(--s4); }
+.toefl-criteria li .name { flex: none; min-width: 210px; }
+.toefl-criteria li[data-ok="false"] .name { color: var(--kraft); }
+.toefl-comment { font-size: 14px; color: var(--ink-2); text-align: left; }
+
+.toefl-subhead { margin: var(--s5) 0 0; font-size: 16px; font-weight: 500; color: var(--ink); }
+.toefl-corrections { max-width: 72ch; }
+.toefl-why { font-size: 13px; color: var(--ink-3); }
+.toefl-improved {
+  margin: var(--s2) 0 0;
+  max-width: 72ch;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink);
+  white-space: pre-wrap;
+}

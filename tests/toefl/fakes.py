@@ -7,6 +7,7 @@ from fluent.toefl.domain.entities import (
     build_sentence_item,
     build_words_item,
 )
+from fluent.toefl.domain.writing import build_discussion_prompt, build_email_prompt
 
 # El párrafo del Practice Test 1 de ETS: sus diez huecos son la respuesta oficial.
 ETS_PARAGRAPH = (
@@ -42,24 +43,21 @@ def words(text: str = ETS_PARAGRAPH) -> WordsItem:
 
 
 class FakeBank:
-    def __init__(self, sentences=None, words=None) -> None:
-        self._sentences: list[SentenceItem] = list(sentences or [])
-        self._words: list[WordsItem] = list(words or [])
+    """Un banco en memoria por tipo. `sentences=` y `words=` son atajos."""
 
-    def sentences(self):
-        return list(self._sentences)
+    def __init__(self, sentences=None, words=None, emails=None, discussions=None) -> None:
+        self.stored: dict[str, list] = {
+            "sentence": list(sentences or []),
+            "words": list(words or []),
+            "email": list(emails or []),
+            "discussion": list(discussions or []),
+        }
 
-    def words(self):
-        return list(self._words)
+    def items(self, kind):
+        return list(self.stored[kind])
 
-    def add_sentences(self, items):
-        return self._add(self._sentences, items)
-
-    def add_words(self, items):
-        return self._add(self._words, items)
-
-    @staticmethod
-    def _add(stored, items):
+    def add(self, kind, items):
+        stored = self.stored[kind]
         seen = {i.id for i in stored}
         before = len(stored)
         for item in items:
@@ -87,15 +85,55 @@ def misses(kind: str, pattern: str, wrong: int, right: int = 0) -> list[Attempt]
 
 
 class FakeGenerator:
-    def __init__(self, sentences=None, paragraphs=None) -> None:
-        self._sentences = sentences or []
-        self._paragraphs = paragraphs or []
+    def __init__(self, **by_kind) -> None:
+        self._by_kind = by_kind
         self.calls: list[tuple[str, int, str | None]] = []
 
-    def sentences(self, count, focus):
-        self.calls.append(("sentences", count, focus))
-        return self._sentences
+    def generate(self, kind, count, focus):
+        self.calls.append((kind, count, focus))
+        return self._by_kind.get(kind, [])
 
-    def paragraphs(self, count, focus):
-        self.calls.append(("paragraphs", count, focus))
-        return self._paragraphs
+
+class FakeSubmissions:
+    def __init__(self, rows=None) -> None:
+        self.rows: list[dict] = list(rows or [])
+
+    def append(self, submission):
+        self.rows.append(submission)
+
+    def recent(self, kind):
+        return [r for r in self.rows if r.get("kind") == kind]
+
+
+class FakeGrader:
+    def __init__(self, result: dict) -> None:
+        self.result = result
+        self.calls: list[tuple[str, str, str]] = []
+
+    def grade(self, kind, brief, text):
+        self.calls.append((kind, brief, text))
+        return self.result
+
+
+def email_prompt():
+    return build_email_prompt(
+        "A new poetry magazine asked for submissions. Write an email to the editor.",
+        "editor@sunshinepoetrymagazine.com",
+        "Problem using submission form",
+        [
+            "Tell the editor what you like about the new magazine.",
+            "Describe the problem you experienced.",
+            "Ask about the status of your submissions.",
+        ],
+    )
+
+
+def discussion_prompt():
+    return build_discussion_prompt(
+        "social studies",
+        "Should high school students be required to do volunteer work? Why or why not?",
+        [
+            {"name": "Claire", "text": "Yes, it builds civic responsibility."},
+            {"name": "Andrew", "text": "No, students already have limited free time."},
+        ],
+    )

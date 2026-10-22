@@ -1,4 +1,5 @@
-"""`data/toefl/` — el banco de ejercicios y los últimos intentos.
+"""`data/toefl/` — el banco de ejercicios, los últimos intentos y las entregas
+de writing.
 
 Mismo molde que `writing/infrastructure/sessions.py`: escritura atómica,
 relectura desconfiada (un renglón que ya no valida se salta, no tumba la
@@ -7,10 +8,14 @@ pantalla) y JSON legible, para que puedas borrar a mano un ejercicio malo.
 
 import json
 import os
+from collections.abc import Callable
 from pathlib import Path
 
 from fluent.shared.config import DATA_DIR
+from fluent.toefl.domain.catalog import DISCUSSION, EMAIL, SENTENCE, WORDS
 from fluent.toefl.domain.entities import Attempt, Gap, SentenceItem, WordsItem
+from fluent.toefl.domain.ports import Item
+from fluent.toefl.domain.writing import DiscussionPrompt, EmailPrompt, Post
 
 TOEFL_DIR = DATA_DIR / "toefl"
 
@@ -19,6 +24,8 @@ TOEFL_DIR = DATA_DIR / "toefl"
 # que se cae del tope vuelve a contar como ejercicio sin hacer, y está bien:
 # es repaso.
 MAX_ATTEMPTS = 500
+# Las entregas guardan el texto entero: cincuenta alcanzan para releer lo último.
+MAX_SUBMISSIONS = 50
 
 
 def _read(path: Path) -> list[dict]:
@@ -77,7 +84,54 @@ def _words_row(item: WordsItem) -> dict:
     }
 
 
-def _load(path: Path, convert) -> list:
+def _email(row: dict) -> EmailPrompt:
+    return EmailPrompt(
+        id=row["id"],
+        situation=row["situation"],
+        to=row["to"],
+        subject=row["subject"],
+        bullets=tuple(row["bullets"]),
+    )
+
+
+def _email_row(item: EmailPrompt) -> dict:
+    return {
+        "id": item.id,
+        "situation": item.situation,
+        "to": item.to,
+        "subject": item.subject,
+        "bullets": list(item.bullets),
+    }
+
+
+def _discussion(row: dict) -> DiscussionPrompt:
+    return DiscussionPrompt(
+        id=row["id"],
+        course=row["course"],
+        professor=row["professor"],
+        posts=tuple(Post(**post) for post in row["posts"]),
+    )
+
+
+def _discussion_row(item: DiscussionPrompt) -> dict:
+    return {
+        "id": item.id,
+        "course": item.course,
+        "professor": item.professor,
+        "posts": [{"name": p.name, "text": p.text} for p in item.posts],
+    }
+
+
+# Por tipo: el archivo, de renglón a entidad y de entidad a renglón.
+_FILES: dict[str, tuple[str, Callable[[dict], Item], Callable]] = {
+    SENTENCE: ("sentences.json", _sentence, _sentence_row),
+    WORDS: ("words.json", _words, _words_row),
+    EMAIL: ("emails.json", _email, _email_row),
+    DISCUSSION: ("discussions.json", _discussion, _discussion_row),
+}
+
+
+def _load(path: Path, convert: Callable[[dict], object]) -> list:
     items = []
     for row in _read(path):
         try:
@@ -89,29 +143,22 @@ def _load(path: Path, convert) -> list:
 
 class DiskBank:
     def __init__(self, root: Path = TOEFL_DIR) -> None:
-        self._sentences = root / "sentences.json"
-        self._words = root / "words.json"
+        self._root = root
 
-    def sentences(self) -> list[SentenceItem]:
-        return _load(self._sentences, _sentence)
+    def items(self, kind: str) -> list[Item]:
+        name, from_row, _ = _FILES[kind]
+        return _load(self._root / name, from_row)
 
-    def words(self) -> list[WordsItem]:
-        return _load(self._words, _words)
-
-    def add_sentences(self, items: list[SentenceItem]) -> int:
-        return self._add(self._sentences, [_sentence_row(i) for i in items])
-
-    def add_words(self, items: list[WordsItem]) -> int:
-        return self._add(self._words, [_words_row(i) for i in items])
-
-    def _add(self, path: Path, rows: list[dict]) -> int:
+    def add(self, kind: str, items: list[Item]) -> int:
+        name, _, to_row = _FILES[kind]
+        path = self._root / name
         stored = _read(path)
         seen = {row.get("id") for row in stored}
         fresh = []
-        for row in rows:
-            if row["id"] not in seen:
-                seen.add(row["id"])
-                fresh.append(row)
+        for item in items:
+            if item.id not in seen:
+                seen.add(item.id)
+                fresh.append(to_row(item))
         if fresh:
             _write(path, stored + fresh)
         return len(fresh)
@@ -136,3 +183,14 @@ class DiskAttempts:
 
     def recent(self) -> list[Attempt]:
         return _load(self._path, lambda row: Attempt(**row))
+
+
+class DiskSubmissions:
+    def __init__(self, root: Path = TOEFL_DIR) -> None:
+        self._path = root / "submissions.json"
+
+    def append(self, submission: dict) -> None:
+        _write(self._path, (_read(self._path) + [submission])[-MAX_SUBMISSIONS:])
+
+    def recent(self, kind: str) -> list[dict]:
+        return [row for row in _read(self._path) if row.get("kind") == kind]

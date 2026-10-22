@@ -1,6 +1,6 @@
 import pytest
 
-from fluent.toefl.application.refill_bank import SENTENCE_BATCH, RefillBank
+from fluent.toefl.application.refill_bank import BATCH, RefillBank
 from fluent.toefl.domain.errors import NothingGenerated, UnknownKind, UnknownPattern
 
 from .fakes import ETS_PARAGRAPH, FakeBank, FakeGenerator
@@ -18,7 +18,7 @@ def raw_sentence(chunks):
 
 def test_refill_keeps_the_valid_and_counts_the_rest():
     generator = FakeGenerator(
-        sentences=[
+        sentence=[
             raw_sentence(["the guide", "that", "was provided", "by", "the professor"]),
             raw_sentence(["the guide", "that", "was provided", "by", "the professor"]),
             raw_sentence(["too", "short"]),
@@ -35,18 +35,18 @@ def test_refill_keeps_the_valid_and_counts_the_rest():
     bank = FakeBank()
     out = RefillBank(bank, generator)("sentence", focus="passive")
     assert out == {"added": 1, "rejected": 3, "duplicates": 1}
-    assert generator.calls == [("sentences", SENTENCE_BATCH, "passive")]
-    assert len(bank.sentences()) == 1
+    assert generator.calls == [("sentence", BATCH["sentence"], "passive")]
+    assert len(bank.items("sentence")) == 1
 
 
 def test_refill_words_and_nothing_usable():
     bank = FakeBank()
-    out = RefillBank(bank, FakeGenerator(paragraphs=[{"text": ETS_PARAGRAPH}, {"text": "Short."}]))(
+    out = RefillBank(bank, FakeGenerator(words=[{"text": ETS_PARAGRAPH}, {"text": "Short."}]))(
         "words"
     )
     assert out == {"added": 1, "rejected": 1, "duplicates": 0}
     with pytest.raises(NothingGenerated):
-        RefillBank(bank, FakeGenerator(paragraphs=[{"text": "Short."}]))("words")
+        RefillBank(bank, FakeGenerator(words=[{"text": "Short."}]))("words")
 
 
 def test_refill_validates_kind_and_focus():
