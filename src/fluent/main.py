@@ -48,6 +48,14 @@ from fluent.syllabi.infrastructure.api.deps import SyllabusUseCases
 from fluent.syllabi.infrastructure.api.router import router as syllabi_router
 from fluent.syllabi.infrastructure.disk_store import DiskSyllabusStore
 from fluent.syllabi.infrastructure.llm_model import LlmSyllabusModel
+from fluent.toefl.application.get_overview import GetOverview
+from fluent.toefl.application.grade_attempt import GradeAttempt
+from fluent.toefl.application.next_item import NextItem
+from fluent.toefl.application.refill_bank import RefillBank
+from fluent.toefl.infrastructure.api.deps import ToeflUseCases
+from fluent.toefl.infrastructure.api.router import router as toefl_router
+from fluent.toefl.infrastructure.disk_bank import DiskAttempts, DiskBank
+from fluent.toefl.infrastructure.llm_generator import LlmGenerator
 from fluent.writing.application.answer_turn import AnswerTurn
 from fluent.writing.application.close_session import CloseSession
 from fluent.writing.application.get_patterns import GetPatterns
@@ -88,6 +96,8 @@ def build_app() -> FastAPI:
     sessions = DiskSessions()
     patterns = DiskPatterns()
     cards_store = AnkiCardStore(anki, snapshots)
+    toefl_bank = DiskBank()
+    toefl_log = DiskAttempts()
 
     # ---- casos de uso por funcionalidad
     settings = SettingsUseCases(read=ReadSettings(state), write=WriteSettings(state))
@@ -122,6 +132,12 @@ def build_app() -> FastAPI:
         get_patterns=GetPatterns(patterns),
         mark_pattern=MarkPattern(patterns),
     )
+    toefl = ToeflUseCases(
+        overview=GetOverview(toefl_bank, toefl_log),
+        next_item=NextItem(toefl_bank, toefl_log),
+        grade=GradeAttempt(toefl_bank, toefl_log, clock),
+        refill=RefillBank(toefl_bank, LlmGenerator(generate)),
+    )
 
     app = FastAPI(title="claude-fluent")
     app.state.anki = anki
@@ -130,6 +146,7 @@ def build_app() -> FastAPI:
     app.state.cards = cards
     app.state.syllabi = syllabi
     app.state.writing = writing
+    app.state.toefl = toefl
 
     @app.exception_handler(DomainError)
     def translate_domain_error(_: Request, exc: DomainError) -> JSONResponse:
@@ -167,6 +184,7 @@ def build_app() -> FastAPI:
         cards_router,
         syllabi_router,
         writing_router,
+        toefl_router,
     ):
         app.include_router(router)
     # Must go last: mounted at the root, it swallows the /api routes above it.
