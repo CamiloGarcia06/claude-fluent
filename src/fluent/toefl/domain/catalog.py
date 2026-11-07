@@ -1,5 +1,6 @@
 """Los patrones del TOEFL iBT (formato del 21-01-2026) que se entrenan, con el
-consejo que acompaña a cada uno.
+consejo que acompaña a cada uno: los de los dos ejercicios cerrados y los
+criterios de la rúbrica de writing.
 
 **El consejo es texto fijo, no una llamada al modelo.** Fallar una pregunta
 indirecta siempre se explica igual: el orden vuelve a ser el de una afirmación.
@@ -15,7 +16,20 @@ from typing import NamedTuple
 
 SENTENCE = "sentence"
 WORDS = "words"
-KINDS = (SENTENCE, WORDS)
+EMAIL = "email"
+DISCUSSION = "discussion"
+DAILY = "daily"
+ACADEMIC = "academic"
+# No es del TOEFL: un texto corto estilo Cambridge B1 Preliminary (correo,
+# artículo o historia), que es a lo que se parece la clasificación de la
+# Javeriana. Se corrige con la misma rúbrica de siete criterios.
+B1 = "b1"
+# Los que se corrigen texto contra texto, los que corrige el modelo con rúbrica
+# y las lecturas con preguntas de opción múltiple (también sin modelo).
+OBJECTIVE_KINDS = (SENTENCE, WORDS)
+WRITING_KINDS = (EMAIL, DISCUSSION, B1)
+READING_KINDS = (DAILY, ACADEMIC)
+KINDS = OBJECTIVE_KINDS + WRITING_KINDS + READING_KINDS
 
 
 class Pattern(NamedTuple):
@@ -108,12 +122,136 @@ WORD_PATTERNS = (
     ),
 )
 
-PATTERNS = {SENTENCE: SENTENCE_PATTERNS, WORDS: WORD_PATTERNS}
+# Writing: lo que mira la rúbrica de ETS, partido en lo que se puede corregir.
+# Un criterio "falla" en una entrega cuando el corrector lo marca o cuando hay
+# una corrección de esa categoría; así el consejo se calcula igual que en los
+# ejercicios cerrados, con una entrega como un intento.
+WRITING_PATTERNS = (
+    Pattern(
+        "task_completion",
+        "Cumplir la tarea",
+        "La nota se cae primero por lo que falta, no por lo que está mal: en el email, "
+        "un párrafo por viñeta y en su orden; en la discusión, tu opinión en la primera frase.",
+        "Dear …, I'm writing because… [viñeta 1]. However, … [viñeta 2]. Could you…? [viñeta 3]",
+    ),
+    Pattern(
+        "development",
+        "Desarrollo",
+        "Cada idea necesita su porqué y un ejemplo concreto. En la discusión, mínimo 100 "
+        "palabras: opinión, dos razones, un ejemplo personal y una frase sobre otro estudiante.",
+        "For example, when I… · This matters because…",
+    ),
+    Pattern(
+        "organization",
+        "Organización",
+        "Conectores que digan qué relación hay entre las frases: first, also, however, "
+        "for example, as a result. Una idea por oración.",
+        "First, … Also, … However, … As a result, …",
+    ),
+    Pattern(
+        "grammar",
+        "Gramática",
+        "Tiempos verbales, concordancia y el sujeto que en español se omite. Releé cada "
+        "oración buscando su sujeto y su verbo antes de entregar.",
+        "Is important → It is important · he go → he goes",
+    ),
+    Pattern(
+        "vocabulary",
+        "Vocabulario",
+        "Una palabra precisa vale más que tres vagas: cambiá thing, good y very por la "
+        "palabra exacta, y cuidado con los falsos amigos.",
+        "actually ≠ actualmente · a very big problem → a serious problem",
+    ),
+    Pattern(
+        "mechanics",
+        "Ortografía y puntuación",
+        "Mayúscula al empezar y en I, coma después de los conectores iniciales y punto "
+        "al final. Son puntos que se pierden por apuro.",
+        "However, … · i think → I think",
+    ),
+    Pattern(
+        "register",
+        "Tono",
+        "El email es a alguien que no conocés: saludo y despedida formales, could you / "
+        "I would like, nada de wanna ni abreviaturas.",
+        "I want → I would like · Hi! → Dear Editor,",
+    ),
+)
+
+# Reading: los seis tipos de pregunta de Read in Daily Life y Read an Academic
+# Passage. El consejo es la estrategia para encontrar la respuesta, no la
+# respuesta: en el examen el texto cambia y la estrategia no.
+READING_PATTERNS = (
+    Pattern(
+        "main_idea",
+        "Idea principal",
+        "La respuesta resume todo el texto, no un párrafo. Descartá la opción que habla "
+        "de un solo detalle (muy estrecha) y la que va más allá de lo que el texto trata "
+        "(muy amplia). La primera oración de cada párrafo suele bastar.",
+        "What is the passage mainly about? · What is the main purpose of the post?",
+    ),
+    Pattern(
+        "detail",
+        "Detalle",
+        "Está escrito en el texto con otras palabras. Buscá la palabra clave de la "
+        "pregunta, leé esa oración y la siguiente, y elegí la opción que dice lo mismo "
+        "parafraseado: la que copia palabras sueltas del texto suele ser la trampa.",
+        "cordial service and quality → friendly service and excellent products",
+    ),
+    Pattern(
+        "word_meaning",
+        "Palabra en contexto",
+        "Poné cada opción en lugar de la palabra y releé la oración: queda la que no "
+        "cambia el sentido. El significado más común de la palabra no siempre es el "
+        "del texto.",
+        "achieve this milestone → accomplishment (no distance)",
+    ),
+    Pattern(
+        "inference",
+        "Inferencia",
+        "No está escrito, pero se deduce de algo que sí está. La correcta se apoya en una "
+        "frase concreta; si para elegirla tenés que imaginar algo que el texto no dice, "
+        "es incorrecta.",
+        "these treats sell out fast → conviene llegar temprano",
+    ),
+    Pattern(
+        "negative_fact",
+        "NOT / EXCEPT",
+        "Tres opciones son verdad y buscás la que no. Encontrá cada opción en el texto y "
+        "tachala; la que no aparece es la respuesta. Leer la pregunta con calma: el "
+        "EXCEPT da vuelta todo.",
+        "All of the following are true about elephants EXCEPT:",
+    ),
+    Pattern(
+        "author_purpose",
+        "Para qué lo menciona",
+        "La pregunta no es qué dice esa parte sino para qué está: ejemplo, contraste o "
+        "prueba de una idea. Leé la oración de antes: casi siempre nombra la idea que el "
+        "ejemplo apoya.",
+        "Why does the author mention cleaner fish? → para mostrar que más animales…",
+    ),
+)
+
+PATTERNS = {
+    SENTENCE: SENTENCE_PATTERNS,
+    WORDS: WORD_PATTERNS,
+    EMAIL: WRITING_PATTERNS,
+    DISCUSSION: WRITING_PATTERNS,
+    B1: WRITING_PATTERNS,
+    DAILY: READING_PATTERNS,
+    ACADEMIC: READING_PATTERNS,
+}
 _BY_KEY = {p.key: p for group in PATTERNS.values() for p in group}
 
 
 def pattern(key: str) -> Pattern | None:
     return _BY_KEY.get(key)
+
+
+def tip_card(key: str) -> dict:
+    """El consejo de un patrón tal como lo muestra la pantalla."""
+    info = _BY_KEY[key]
+    return {"key": key, "label": info.label, "tip": info.tip, "example": info.example}
 
 
 def keys(kind: str) -> tuple[str, ...]:

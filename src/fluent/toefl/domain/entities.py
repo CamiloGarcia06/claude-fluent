@@ -1,4 +1,5 @@
-"""Los dos ejercicios del banco y el intento que deja cada respuesta.
+"""Los dos ejercicios cerrados del banco y el intento que deja cada respuesta.
+Los enunciados de writing están en `writing.py`.
 
 Todo lo que llega del modelo pasa por acá antes de guardarse: un ejercicio que
 no se puede resolver (piezas vacías, un hueco que no está en el párrafo) se
@@ -23,17 +24,18 @@ _SENTENCE_END = re.compile(r"[.!?](?=\s)")
 _WORD = re.compile(r"[A-Za-z]+(?:['’][A-Za-z]+)?|\d+")
 
 
-def _clean(value) -> str:
+def clean_text(value) -> str:
+    """Espacios colapsados y sin bordes: así llega todo texto del modelo al banco."""
     return " ".join(str(value or "").split())
 
 
-def _digest(*parts: str) -> str:
+def content_id(*parts: str) -> str:
     """El id sale del contenido: el mismo ejercicio generado dos veces es uno solo."""
     return hashlib.sha1("\x1f".join(parts).encode("utf-8")).hexdigest()[:12]
 
 
 def _same(a: str, b: str) -> bool:
-    return _clean(a).lower() == _clean(b).lower()
+    return clean_text(a).lower() == clean_text(b).lower()
 
 
 @dataclass(frozen=True)
@@ -78,6 +80,10 @@ class SentenceItem:
             chunks = chunks[1:] + chunks[:1]
         return chunks
 
+    def weight(self, focus: str | None) -> int:
+        """Cuánto practica el patrón débil: el banco sirve primero el más pesado."""
+        return int(self.pattern == focus)
+
     def public(self) -> dict:
         """Lo que viaja a la pantalla: sin `answer`."""
         return {
@@ -97,10 +103,10 @@ class SentenceItem:
 
 
 def build_sentence_item(pattern, context, before, after, chunks) -> SentenceItem:
-    answer = tuple(_clean(c) for c in (chunks or []))
-    before, after, context = _clean(before), _clean(after), _clean(context)
+    answer = tuple(clean_text(c) for c in (chunks or []))
+    before, after, context = clean_text(before), clean_text(after), clean_text(context)
     return SentenceItem(
-        id=_digest(SENTENCE, before, *answer, after),
+        id=content_id(SENTENCE, before, *answer, after),
         pattern=str(pattern or ""),
         context=context,
         before=before,
@@ -136,6 +142,9 @@ class WordsItem:
     def kind(self) -> str:
         return WORDS
 
+    def weight(self, focus: str | None) -> int:
+        return sum(1 for g in self.gaps if g.pattern == focus)
+
     def public(self) -> dict:
         """Sin las letras que faltan: de cada hueco viaja lo visible y cuántas son."""
         return {
@@ -169,7 +178,7 @@ def build_words_item(paragraph) -> WordsItem:
 
     Un párrafo de una sola oración o demasiado corto no sirve: ValueError, y el
     banco lo descarta."""
-    text = _clean(paragraph)
+    text = clean_text(paragraph)
     first_end = _SENTENCE_END.search(text)
     if not first_end:
         raise ValueError("una sola oración")
@@ -196,7 +205,7 @@ def build_words_item(paragraph) -> WordsItem:
         gaps.append(Gap(word, shown, missing, classify_word(word)))
         cursor = found.end()
     parts.append(text[cursor:])
-    return WordsItem(id=_digest(WORDS, text), parts=tuple(parts), gaps=tuple(gaps))
+    return WordsItem(id=content_id(WORDS, text), parts=tuple(parts), gaps=tuple(gaps))
 
 
 @dataclass(frozen=True)

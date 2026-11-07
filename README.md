@@ -59,12 +59,30 @@ terms, three candidates each, edit in place, pick a deck, write with a creation
 record. The syllabus of a level reads on the skill screens: what the level is
 made of, and how much of it your decks cover.
 
-TOEFL (`#/toefl`) trains the two iBT tasks (January 2026 format) that pay most
-per hour: Build a Sentence and Complete the Words. `claude -p` only fills the
-bank in `data/toefl/` (~25 s a batch); practising and grading never call the
-model. The advice comes from the last 10 attempts of each pattern, and the next
-exercise starts with the weakest one. Writing (email, academic discussion) is
-the next phase.
+TOEFL (`#/toefl`) trains the reading and writing tasks of the iBT (January 2026
+format), tabs in exam order. Reading: Complete the Words, Read in Daily Life and
+Read an Academic Passage — multiple choice with a clock against the exam pace,
+and after grading the sentence that answers each question is highlighted in the
+text. Writing: Build a Sentence, Write an Email (7 min) and Academic Discussion
+(10 min, 100 words), the last two graded by Claude with the ETS 0-5 rubric plus
+an untimed rewrite. `claude -p` fills the bank in `data/toefl/` (15-70 s a
+batch) and grades writing; everything else is graded without the model. The
+advice comes from the last 10 attempts of each pattern (question type, rubric
+criterion), and the next exercise starts with the weakest one. Listening and
+speaking are not built: they need TTS/STT dependencies.
+
+On top of the TOEFL screen, **Camino a B1** measures the master's requirement (B1)
+on what I write. Every writing submission also gets a CEFR level (A1-C1) from
+the grader, and a B1 checklist found by rules, without the model (varied
+connectors, contrast, reasons, present perfect, conditional, relative clause).
+The path is a window, not a history: how many of my last 10 first attempts are
+B1 or above, with 8 of 10 as the target. The mission for the next text is the
+two checklist items missing most in the last 5. The weekly routine: Monday and
+Friday a new Texto B1, Tuesday rewrite the weakest text of the week (untimed),
+Wednesday nothing (PLN class), Thursday an Academic Discussion, weekend free.
+The **Texto B1** tab is not TOEFL: Cambridge B1 Preliminary style tasks (email
+with notes, article, story; 100 words, 20 min), because that is what the
+Javeriana placement looks like.
 
 Not built: rename/archive on Mazos and the exercise mode.
 (Update this section after each phase.)

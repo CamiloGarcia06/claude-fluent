@@ -1,5 +1,5 @@
-"""Adaptador del puerto ItemGenerator: los prompts que piden ejercicios con el
-formato del TOEFL iBT del 21-01-2026, sobre el modelo inyectado.
+"""Adaptador del puerto ItemGenerator: los prompts que piden ejercicios y
+enunciados con el formato del TOEFL iBT del 21-01-2026, sobre el modelo inyectado.
 
 Devuelve dicts crudos. Validarlos es trabajo del caso de uso y de las
 entidades: acá solo se descarta lo que ni siquiera tiene la forma esperada.
@@ -12,7 +12,18 @@ menos que entender una explicación.
 from collections.abc import Callable
 
 from fluent.shared.errors import Upstream
-from fluent.toefl.domain.catalog import SENTENCE_PATTERNS, pattern
+from fluent.toefl.domain.catalog import (
+    ACADEMIC,
+    B1,
+    DAILY,
+    DISCUSSION,
+    EMAIL,
+    READING_PATTERNS,
+    SENTENCE,
+    SENTENCE_PATTERNS,
+    WORDS,
+    pattern,
+)
 from fluent.toefl.domain.errors import ModelFailed
 
 Generate = Callable[..., tuple[dict, int]]
@@ -109,6 +120,278 @@ Rules:
 {focus}"""
 
 
+EMAIL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "prompts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "situation": {"type": "string"},
+                    "to": {"type": "string"},
+                    "subject": {"type": "string"},
+                    "bullets": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["situation", "to", "subject", "bullets"],
+            },
+        }
+    },
+    "required": ["prompts"],
+}
+
+DISCUSSION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "prompts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "course": {"type": "string"},
+                    "professor": {"type": "string"},
+                    "posts": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "text": {"type": "string"},
+                            },
+                            "required": ["name", "text"],
+                        },
+                    },
+                },
+                "required": ["course", "professor", "posts"],
+            },
+        }
+    },
+    "required": ["prompts"],
+}
+
+EMAIL_PROMPT = """\
+Write {count} "Write an Email" prompts for the TOEFL iBT (format from January 2026).
+The test taker has 7 minutes to write the email.
+
+Official example:
+situation: "A new poetry magazine has asked its readers for submissions, and you
+decided to submit two of your poems. However, you had a problem using the online
+submission form, and you are not certain that your submissions were received.
+Write an email to the editor of the magazine."
+to: "editor@sunshinepoetrymagazine.com"
+subject: "Problem using submission form"
+bullets: ["Tell the editor what you like about the new magazine.",
+          "Describe the problem you experienced.",
+          "Ask about the status of your submissions."]
+
+Rules:
+- Everyday situations with someone the writer does not know well: a manager, a
+  landlord, a professor, a company, an event organiser. Different in each prompt.
+- Exactly 3 bullets, each a different action: describe, explain, ask, suggest,
+  request, apologise. Each bullet one short sentence.
+- The situation is 2-3 sentences and ends with "Write an email to …".
+- "to" is a realistic email address; "subject" is short.
+"""
+
+DISCUSSION_PROMPT = """\
+Write {count} "Write for an Academic Discussion" prompts for the TOEFL iBT
+(format from January 2026). The test taker has 10 minutes and should write at
+least 100 words.
+
+Official example:
+course: "social studies"
+professor: "Volunteerism refers to the act of offering your time and service
+without financial compensation to benefit a community, organization, or cause.
+While many people volunteer mainly to help others, some institutions have
+mandatory volunteer programs. High schools are one example, where students may be
+required to complete a certain number of volunteer hours to graduate. What do you
+think? Should high school students be required to do volunteer work? Why or why not?"
+posts: [
+  {{"name": "Claire", "text": "Yes, I think high schools should require volunteer
+  hours because it helps students build a sense of civic responsibility. …"}},
+  {{"name": "Andrew", "text": "I don't think volunteer hours should be required
+  because many students already have limited free time. …"}}
+]
+
+Rules:
+- The professor explains the topic in 2-3 sentences and ends with a clear
+  question that has more than one reasonable answer.
+- Exactly 2 student posts of 2-3 sentences each, with different opinions and
+  different first names.
+- Topics from university courses: education, technology, business, environment,
+  psychology, urban planning, media. Different in each prompt.
+"""
+
+B1_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "prompts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "genre": {"type": "string", "enum": ["email", "article", "story"]},
+                    "title": {"type": "string"},
+                    "task": {"type": "string"},
+                    "notes": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["genre", "title", "task", "notes"],
+            },
+        }
+    },
+    "required": ["prompts"],
+}
+
+B1_PROMPT = """\
+Write {count} writing tasks in the style of Cambridge B1 Preliminary (PET), Writing
+Part 1 and Part 2. The writer should produce about 100 words in 20 minutes.
+
+Use each genre at least once, in this order: email, article, story.
+
+- email (Part 1): "task" is a short email the writer received from a friend,
+  teacher or club (3-5 sentences, signed), and "notes" are exactly 3 or 4 short
+  handwritten-style notes on it that the reply must cover ("Yes, great idea!",
+  "Explain why", "Suggest a day", "Say which one").
+  "title" is the email subject.
+- article (Part 2): "title" is the article title from a magazine or website;
+  "task" is the announcement inviting readers to write (2-3 sentences ending
+  with the questions to answer, e.g. "What is your favourite…? Why?").
+  "notes" is an empty list.
+- story (Part 2): "title" is "A story"; "task" says "Your story must begin with
+  this sentence:" followed by the first sentence in quotes. "notes" is an
+  empty list.
+
+Rules:
+- Everyday topics a young adult in Colombia can write about: free time, travel,
+  food, technology, study, work, friends, sport, music, the city.
+- Simple B1 English in the task itself. Different topic in each task.
+"""
+
+READING_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "texts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "genre": {"type": "string"},
+                    "title": {"type": "string"},
+                    "text": {"type": "string"},
+                    "questions": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "pattern": {
+                                    "type": "string",
+                                    "enum": [p.key for p in READING_PATTERNS],
+                                },
+                                "prompt": {"type": "string"},
+                                "options": {"type": "array", "items": {"type": "string"}},
+                                "answer": {"type": "integer", "minimum": 0, "maximum": 3},
+                                "evidence": {"type": "string"},
+                                "why": {"type": "string"},
+                            },
+                            "required": [
+                                "pattern",
+                                "prompt",
+                                "options",
+                                "answer",
+                                "evidence",
+                                "why",
+                            ],
+                        },
+                    },
+                },
+                "required": ["genre", "title", "text", "questions"],
+            },
+        }
+    },
+    "required": ["texts"],
+}
+
+_READING_RULES = """Question types (use these keys):
+{patterns}
+
+Rules for every question:
+- Exactly 4 options, one clearly correct. The 3 wrong options must be tempting:
+  they reuse words from the text, are true but do not answer the question, or go
+  further than the text.
+- "answer" is the 0-based index of the correct option.
+- "evidence": the sentence or phrase of the text that proves the answer, copied
+  EXACTLY, character by character (for negative_fact, the phrase that proves the
+  three true options is not needed: copy the one that is closest to the false one).
+- "why": IN SPANISH, 1-2 short sentences for a B1 reader: why the correct option
+  is right and what makes the most tempting wrong option wrong. The options are
+  shuffled later, so NEVER refer to an option by its letter or position ("la B",
+  "la primera"): quote its words instead ("«falls heavily» tienta porque…").
+{focus}"""
+
+DAILY_PROMPT = (
+    """Write {count} "Read in Daily Life" texts for the TOEFL iBT (format from January 2026).
+
+Each text is a short piece of everyday reading: a notice, an email, a social media
+post, an advertisement, a schedule, a menu, a text-message exchange or a flyer.
+Every text a different genre and topic. Level B1-B2. A notice or an advertisement
+is 40-80 words with 2 questions; a post, an email or a schedule is 100-180 words
+with 3 questions. Separate paragraphs with a blank line. "genre" is one word
+(notice, email, post…); "title" is the heading or the sender's name.
+
+Official example (a notice, 2 questions):
+"Municipal Charter. Sign up for paperless billing statements today. Safe,
+convenient, easy. Enroll in paperless billing to receive monthly savings account
+statements in an electronic PDF document. Access your Municipal Charter account
+through the mobile app and select account preferences in the upper right-hand
+corner to enroll."
+- What type of business issued the notice? (A) An Internet provider (B) A computer
+  company (C) A paper company (D) A bank   [inference: "savings account statements"]
+- How can customers enroll in paperless billing? (A) By visiting a Municipal
+  Charter office (B) By accessing the Municipal Charter website (C) By using the
+  Municipal Charter app (D) By calling a customer service representative   [detail]
+
+Use mostly main_idea, detail and inference; word_meaning sometimes.
+
+"""
+    + _READING_RULES
+)
+
+ACADEMIC_PROMPT = (
+    """Write {count} "Read an Academic Passage" texts for the TOEFL iBT (format from
+January 2026).
+
+Each passage is like an introductory textbook: biology, psychology, history,
+geology, astronomy, economics, art, archaeology. Every passage a different field.
+3 paragraphs, 180-260 words in total, level B1-B2, with a short title. Separate
+paragraphs with a blank line. "genre" is the field.
+
+Exactly 5 questions per passage, in the order of the text, and of 5 different
+types when possible: the first one is main_idea.
+
+Official example, "The Mirror Test": very young children cannot recognize
+themselves in a mirror until about 18 months; scientists put a colored mark on
+apes' bodies to see if they recognized their reflection; elephants, dolphins and
+even cleaner fish later passed the test.
+- What is the passage mainly about? (A) Stages of early childhood development
+  (B) Research on animal cognition (C) Differences between apes, elephants, and
+  dolphins (D) Recent experiments on fish   [main_idea]
+- The word "milestone" in the first sentence is closest in meaning to
+  (A) accomplishment (B) distance (C) weight (D) discovery   [word_meaning]
+- Why did scientists put colored marks on animals' bodies?   [detail]
+- According to the passage, all of the following are true about elephants
+  EXCEPT:   [negative_fact]
+- Why does the author mention cleaner fish? (A) To suggest that a wide range of
+  animals may possess self-awareness …   [author_purpose]
+
+"""
+    + _READING_RULES
+)
+
+
+def _reading_patterns() -> str:
+    return "\n".join(f"- {p.key}: {p.label}. {p.example}" for p in READING_PATTERNS)
+
+
 def _patterns_block() -> str:
     return "\n".join(f"- {p.key}: {p.label}. {p.example}" for p in SENTENCE_PATTERNS)
 
@@ -132,17 +415,36 @@ class LlmGenerator:
     def __init__(self, generate: Generate) -> None:
         self._generate = generate
 
-    def sentences(self, count: int, focus: str | None) -> list[dict]:
-        prompt = SENTENCE_PROMPT.format(
-            count=count, patterns=_patterns_block(), focus=_focus(focus, "items")
-        )
-        return _rows(self._call(prompt, SENTENCE_SCHEMA), "items")
-
-    def paragraphs(self, count: int, focus: str | None) -> list[dict]:
-        prompt = PARAGRAPH_PROMPT.format(
-            count=count, focus=_focus(focus, "second and third sentences")
-        )
-        return _rows(self._call(prompt, PARAGRAPH_SCHEMA), "paragraphs")
+    def generate(self, kind: str, count: int, focus: str | None) -> list[dict]:
+        """El foco se usa en los ejercicios cerrados y en reading: en writing el criterio
+        débil (el tono, el desarrollo) no depende del enunciado, sino de cómo
+        escribís cualquiera."""
+        if kind == SENTENCE:
+            prompt = SENTENCE_PROMPT.format(
+                count=count, patterns=_patterns_block(), focus=_focus(focus, "items")
+            )
+            return _rows(self._call(prompt, SENTENCE_SCHEMA), "items")
+        if kind == WORDS:
+            prompt = PARAGRAPH_PROMPT.format(
+                count=count, focus=_focus(focus, "second and third sentences")
+            )
+            return _rows(self._call(prompt, PARAGRAPH_SCHEMA), "paragraphs")
+        if kind == EMAIL:
+            return _rows(self._call(EMAIL_PROMPT.format(count=count), EMAIL_SCHEMA), "prompts")
+        if kind == DISCUSSION:
+            prompt = DISCUSSION_PROMPT.format(count=count)
+            return _rows(self._call(prompt, DISCUSSION_SCHEMA), "prompts")
+        if kind == B1:
+            return _rows(self._call(B1_PROMPT.format(count=count), B1_SCHEMA), "prompts")
+        if kind in (DAILY, ACADEMIC):
+            template = DAILY_PROMPT if kind == DAILY else ACADEMIC_PROMPT
+            prompt = template.format(
+                count=count,
+                patterns=_reading_patterns(),
+                focus=_focus(focus, "questions of each text"),
+            )
+            return _rows(self._call(prompt, READING_SCHEMA), "texts")
+        return []
 
     def _call(self, prompt: str, schema: dict) -> dict:
         try:

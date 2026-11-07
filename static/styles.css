@@ -2076,3 +2076,131 @@ h2 .rail-chip { margin-left: var(--s2); }
 }
 .toefl-tip p { margin: var(--s2) 0 0; font-size: 15px; line-height: 1.55; color: var(--ink-2); }
 .toefl-tip .toefl-example { font-family: var(--mono); font-size: 13px; color: var(--ink-3); }
+
+/* Writing: el enunciado se lee como el del examen, el texto en la caja de
+   siempre, y la corrección baja en el orden en que se usa — nota, por qué,
+   criterio por criterio, correcciones, cómo se vería un 5. */
+#toefl-result .foot-msg { text-align: left; margin-top: var(--s4); }
+#toefl-meta[data-urgent="true"] { color: var(--kraft); }
+
+.toefl-brief {
+  margin-top: var(--s4);
+  padding: var(--s4) var(--s5);
+  background: var(--paper-inset);
+  border-radius: var(--r-rough);
+  max-width: 72ch;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.toefl-brief p { margin: var(--s2) 0 0; }
+.toefl-brief p:first-child { margin-top: 0; }
+.toefl-bullets { margin: var(--s1) 0 0; padding-left: var(--s5); }
+.toefl-label {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
+.toefl-mail { font-family: var(--mono); font-size: 13px; color: var(--ink-2); }
+.toefl-post { padding-top: var(--s2); border-top: 1px solid var(--rule-faint); }
+
+.toefl-text { max-width: 72ch; min-height: 220px; resize: vertical; }
+.toefl-count { margin: var(--s2) 0 0; font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+.toefl-count[data-short="true"] { color: var(--kraft); }
+
+.toefl-criteria li { align-items: baseline; gap: var(--s4); }
+.toefl-criteria li .name { flex: none; min-width: 210px; }
+.toefl-criteria li[data-ok="false"] .name { color: var(--kraft); }
+.toefl-comment { font-size: 14px; color: var(--ink-2); text-align: left; }
+
+.toefl-subhead { margin: var(--s5) 0 0; font-size: 16px; font-weight: 500; color: var(--ink); }
+.toefl-corrections { max-width: 72ch; }
+.toefl-why { font-size: 13px; color: var(--ink-3); }
+.toefl-improved {
+  margin: var(--s2) 0 0;
+  max-width: 72ch;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+
+/* TOEFL · reading */
+.toefl-passage { max-width: 72ch; }
+.toefl-para { font-size: 16px; line-height: 1.65; color: var(--ink); }
+.toefl-evidence { background: var(--present-dim); color: inherit; padding: 0 2px; border-radius: var(--r-sm); }
+.toefl-evidence[data-correct="false"] { background: var(--kraft-dim); }
+.toefl-evidence::before {
+  content: attr(data-q);
+  font-family: var(--mono); font-size: 11px; vertical-align: super;
+  margin-right: 2px; color: var(--ink-3);
+}
+.toefl-questions { max-width: 72ch; margin: var(--s5) 0 0; padding-left: var(--s5); }
+.toefl-q { margin-top: var(--s5); }
+.toefl-prompt { margin: 0 0 var(--s2); font-size: 16px; color: var(--ink); }
+.toefl-option {
+  display: flex; gap: var(--s2); align-items: baseline;
+  padding: var(--s1) var(--s2); border-radius: var(--r-sm);
+  font-size: 15px; color: var(--ink-2); cursor: pointer;
+}
+.toefl-option:hover { background: var(--paper-inset); }
+.toefl-option input { margin: 0; }
+.toefl-letter { font-family: var(--mono); font-size: 13px; color: var(--ink-3); }
+.toefl-option[data-state="right"] { background: var(--present-dim); color: var(--present); }
+.toefl-option[data-state="wrong"] { background: var(--kraft-dim); color: var(--kraft); text-decoration: line-through; }
+.toefl-q .toefl-why { margin: var(--s2) 0 0; line-height: 1.5; }
+.toefl-q .toefl-why .tag { margin-right: var(--s1); }
+.toefl-q[data-correct="false"] .toefl-why .tag { color: var(--kraft); }
+.toefl-slow { color: var(--kraft); }
+
+/* ── TOEFL · camino a B1 ─────────────────────────────────────────── */
+
+.b1-today { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); }
+.b1-today p { margin: 0; color: var(--ink-2); }
+
+.b1-week {
+  list-style: none; margin: var(--s4) 0 0; padding: 0;
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--s2);
+}
+.b1-week li {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: var(--s2) 0; border: 1px solid var(--rule-faint); border-radius: 6px;
+  color: var(--ink-3); font-size: 13px;
+}
+.b1-week li[data-today="true"] { border-color: var(--present); color: var(--ink); }
+.b1-week li[data-done="true"] { background: var(--present-dim); color: var(--present); }
+.b1-week li[data-done="false"]:not([data-today="true"]) { color: var(--kraft); }
+.b1-week li[data-task="rest"], .b1-week li[data-task="free"] { color: var(--ink-4); }
+.b1-day { text-transform: capitalize; }
+.b1-mark { font-family: var(--mono); font-size: 12px; }
+
+.b1-road { margin-top: var(--s4); }
+.b1-road-head { margin: 0; color: var(--ink-2); }
+.b1-dots {
+  list-style: none; margin: var(--s2) 0 0; padding: 0;
+  display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: var(--s1);
+}
+.b1-dots li {
+  height: 26px; display: grid; place-items: center; border-radius: 4px;
+  font-family: var(--mono); font-size: 11px; border: 1px dashed var(--rule);
+  color: var(--ink-4);
+}
+.b1-dots li[data-state="ok"] { border: 0; background: var(--present); color: var(--present-ink); }
+.b1-dots li[data-state="short"] { border: 0; background: var(--kraft-dim); color: var(--kraft); }
+
+.b1-mission { margin-top: var(--s4); }
+.b1-mission-note {
+  margin: var(--s3) 0 0; padding: var(--s2) var(--s3); border-left: 3px solid var(--present);
+  background: var(--present-dim); color: var(--ink-2); font-size: 14px;
+}
+
+.b1-checks {
+  list-style: none; margin: var(--s2) 0 0; padding: 0;
+  display: flex; flex-wrap: wrap; gap: var(--s2);
+}
+.b1-checks li {
+  padding: 2px var(--s2); border-radius: 4px; font-size: 13px;
+  background: var(--kraft-dim); color: var(--kraft);
+}
+.b1-checks li[data-ok="true"] { background: var(--present-dim); color: var(--present); }

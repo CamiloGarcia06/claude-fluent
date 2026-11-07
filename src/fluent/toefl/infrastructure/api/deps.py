@@ -2,18 +2,24 @@ from dataclasses import dataclass
 
 from fastapi import Request
 
+from fluent.toefl.application.get_b1_path import GetB1Path
 from fluent.toefl.application.get_overview import GetOverview
 from fluent.toefl.application.grade_attempt import GradeAttempt
+from fluent.toefl.application.grade_reading import GradeReading
 from fluent.toefl.application.next_item import NextItem
 from fluent.toefl.application.refill_bank import RefillBank
+from fluent.toefl.application.submit_writing import SubmitWriting
 
 
 @dataclass(frozen=True)
 class ToeflUseCases:
     overview: GetOverview
+    path: GetB1Path
     next_item: NextItem
     grade: GradeAttempt
     refill: RefillBank
+    submit: SubmitWriting
+    read: GradeReading
 
 
 def get_toefl(request: Request) -> ToeflUseCases:
