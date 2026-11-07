@@ -15,6 +15,7 @@ TEXT = "Dear Editor, i love your magazine. Is very good. Could you tell me if yo
 def raw(**over):
     base = {
         "score": 3,
+        "level": "A2",
         "summary": "Cumple la tarea pero con errores.",
         "criteria": [
             {"key": "task_completion", "ok": True, "comment": "Las tres viñetas."},
@@ -80,3 +81,37 @@ def test_prompts_validate_and_hide_nothing_secret():
         build_email_prompt("s", "to", "subj", ["one", "two"])
     with pytest.raises(ValueError):
         build_discussion_prompt("c", "q?", [{"name": "A", "text": "t"}])
+
+
+@pytest.mark.parametrize("level", ["B3", "b1", None, 2])
+def test_feedback_rejects_an_unknown_level(level):
+    with pytest.raises(ValueError):
+        build_feedback(raw(level=level), "email", TEXT)
+
+
+def test_feedback_keeps_the_level():
+    assert build_feedback(raw(level="B1"), "b1", TEXT).level == "B1"
+
+
+def test_b1_prompts_validate_by_genre():
+    from fluent.toefl.domain.writing import build_b1_prompt
+
+    from .fakes import b1_email, b1_story
+
+    email = b1_email()
+    assert email.public()["minutes"] == 20 and email.public()["min_words"] == 100
+    assert "Notes to cover:\n- Great idea!" in email.brief()
+    assert "Notes" not in b1_story().brief()
+    with pytest.raises(ValueError):
+        build_b1_prompt("poem", "t", "task", [])
+    with pytest.raises(ValueError):
+        build_b1_prompt("email", "t", "task", ["only one"])
+    with pytest.raises(ValueError):
+        build_b1_prompt("article", "t", "task", ["a", "b", "c", "d", "e"])
+    with pytest.raises(ValueError):
+        build_b1_prompt("story", "", "task", [])
+
+
+def test_b1_text_under_100_words_flags_development():
+    fb = build_feedback(raw(), "b1", TEXT)
+    assert "development" in fb.flagged()

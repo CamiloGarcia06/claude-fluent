@@ -19,6 +19,9 @@ def test_grader_uses_the_rubric_of_the_task():
     assert grader.grade("discussion", "the brief", "my text") == {"score": 4}
     assert "Write an Email (0-5)" in prompts[0] and "my text" in prompts[0]
     assert "Academic Discussion (0-5)" in prompts[1]
+    grader.grade("b1", "the brief", "my text")
+    assert "Cambridge B1 Preliminary writing" in prompts[2]
+    assert all("CEFR level of the writing" in p for p in prompts)
 
 
 def test_grader_translates_model_errors_and_bad_shapes():

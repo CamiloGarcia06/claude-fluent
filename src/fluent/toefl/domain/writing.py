@@ -10,15 +10,20 @@ dijiste. Lo que sí se puede contar sin modelo —las palabras— se cuenta acá
 import re
 from dataclasses import dataclass
 
-from fluent.toefl.domain.catalog import DISCUSSION, EMAIL, WRITING_PATTERNS
+from fluent.toefl.domain.catalog import B1, DISCUSSION, EMAIL, WRITING_PATTERNS
 from fluent.toefl.domain.entities import clean_text, content_id
 
-# Los minutos del examen, y el mínimo que pide el enunciado de la discusión.
-MINUTES = {EMAIL: 7, DISCUSSION: 10}
-MIN_WORDS = {EMAIL: 0, DISCUSSION: 100}
+# Los minutos del examen, y el mínimo que pide el enunciado. El texto B1 no es
+# del TOEFL: Cambridge da 45 minutos para dos textos de unas 100 palabras.
+MINUTES = {EMAIL: 7, DISCUSSION: 10, B1: 20}
+MIN_WORDS = {EMAIL: 0, DISCUSSION: 100, B1: 100}
 MAX_TEXT_CHARS = 4000
 MAX_SCORE = 5
 MAX_CORRECTIONS = 8
+# El nivel del marco europeo que estima el corrector, de menor a mayor. Es lo
+# que mide el requisito de la maestría (B1), no la nota de ETS.
+LEVELS = ("A1", "A2", "B1", "B2", "C1")
+B1_GENRES = ("email", "article", "story")
 
 _WRITING_KEYS = frozenset(p.key for p in WRITING_PATTERNS)
 _WORD = re.compile(r"[A-Za-z]+(?:['’][A-Za-z]+)*|\d+")
@@ -135,6 +140,66 @@ def build_discussion_prompt(course, professor, posts) -> DiscussionPrompt:
 
 
 @dataclass(frozen=True)
+class B1Prompt:
+    """Un enunciado estilo Cambridge B1 Preliminary: responder un correo con
+    sus notas, un artículo de opinión o una historia que empieza con una frase
+    dada."""
+
+    id: str
+    genre: str
+    title: str
+    task: str
+    notes: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if self.genre not in B1_GENRES:
+            raise ValueError(f"género desconocido: {self.genre!r}")
+        if not self.title or not self.task:
+            raise ValueError("enunciado incompleto")
+        if len(self.notes) > 4 or any(not n for n in self.notes):
+            raise ValueError("como mucho cuatro notas, ninguna vacía")
+        if self.genre == "email" and len(self.notes) < 2:
+            raise ValueError("el correo trae las notas que hay que responder")
+
+    @property
+    def kind(self) -> str:
+        return B1
+
+    def weight(self, focus: str | None) -> int:
+        return 0
+
+    def public(self) -> dict:
+        return {
+            "id": self.id,
+            "kind": B1,
+            "genre": self.genre,
+            "title": self.title,
+            "task": self.task,
+            "notes": list(self.notes),
+            "minutes": MINUTES[B1],
+            "min_words": MIN_WORDS[B1],
+        }
+
+    def brief(self) -> str:
+        notes = "\n".join(f"- {n}" for n in self.notes)
+        head = f"Cambridge B1 Preliminary writing, {self.genre}: {self.title}\n{self.task}"
+        return f"{head}\nNotes to cover:\n{notes}" if notes else head
+
+
+def build_b1_prompt(genre, title, task, notes) -> B1Prompt:
+    genre = clean_text(genre).lower()
+    title, task = clean_text(title), clean_text(task)
+    items = tuple(clean_text(n) for n in (notes or []))
+    return B1Prompt(
+        id=content_id(B1, genre, title, task),
+        genre=genre,
+        title=title,
+        task=task,
+        notes=items,
+    )
+
+
+@dataclass(frozen=True)
 class Criterion:
     key: str
     ok: bool
@@ -157,6 +222,7 @@ class Feedback:
     corrections: tuple[Correction, ...]
     improved: str
     words: int
+    level: str
 
     def flagged(self) -> list[str]:
         """Los criterios que fallaron en esta entrega, en el orden del catálogo."""
@@ -169,6 +235,10 @@ def build_feedback(raw: dict, kind: str, text: str) -> Feedback:
     score = raw.get("score")
     if not isinstance(score, int) or isinstance(score, bool) or not 0 <= score <= MAX_SCORE:
         raise ValueError(f"nota inválida: {score!r}")
+
+    level = raw.get("level")
+    if level not in LEVELS:
+        raise ValueError(f"nivel inválido: {level!r}")
 
     words = word_count(text)
     criteria = {}
@@ -203,4 +273,5 @@ def build_feedback(raw: dict, kind: str, text: str) -> Feedback:
         corrections=tuple(corrections[:MAX_CORRECTIONS]),
         improved=str(raw.get("improved") or "").strip(),
         words=words,
+        level=level,
     )

@@ -32,6 +32,12 @@ def test_toefl_round_trip_without_anki_or_model():
     )
 
 
+def test_b1_path_answers_without_anki_or_model():
+    out = TestClient(app_module.app).get("/api/toefl/path").json()
+    assert out["today"]["task"] in {"new", "rewrite", "rest", "free"}
+    assert len(out["week"]) == 7 and out["road"]["target"] == 8
+
+
 def test_reading_round_trip():
     c = TestClient(app_module.app)
     DiskBank().add("academic", [mirror()])

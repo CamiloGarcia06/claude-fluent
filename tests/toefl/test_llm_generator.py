@@ -33,6 +33,17 @@ def test_generator_translates_model_errors():
         LlmGenerator(broken).generate("email", 3, None)
 
 
+def test_b1_prompt_asks_for_the_three_cambridge_genres():
+    prompts = []
+
+    def generate(prompt, schema, system=""):
+        prompts.append(prompt)
+        return {"prompts": [{"genre": "story"}, "junk"]}, 10
+
+    assert LlmGenerator(generate).generate("b1", 3, None) == [{"genre": "story"}]
+    assert "Write 3" in prompts[0] and "email, article, story" in prompts[0]
+
+
 def test_reading_prompt_carries_question_types_and_focus():
     prompts = []
 

@@ -20,10 +20,14 @@ EMAIL = "email"
 DISCUSSION = "discussion"
 DAILY = "daily"
 ACADEMIC = "academic"
+# No es del TOEFL: un texto corto estilo Cambridge B1 Preliminary (correo,
+# artículo o historia), que es a lo que se parece la clasificación de la
+# Javeriana. Se corrige con la misma rúbrica de siete criterios.
+B1 = "b1"
 # Los que se corrigen texto contra texto, los que corrige el modelo con rúbrica
 # y las lecturas con preguntas de opción múltiple (también sin modelo).
 OBJECTIVE_KINDS = (SENTENCE, WORDS)
-WRITING_KINDS = (EMAIL, DISCUSSION)
+WRITING_KINDS = (EMAIL, DISCUSSION, B1)
 READING_KINDS = (DAILY, ACADEMIC)
 KINDS = OBJECTIVE_KINDS + WRITING_KINDS + READING_KINDS
 
@@ -233,6 +237,7 @@ PATTERNS = {
     WORDS: WORD_PATTERNS,
     EMAIL: WRITING_PATTERNS,
     DISCUSSION: WRITING_PATTERNS,
+    B1: WRITING_PATTERNS,
     DAILY: READING_PATTERNS,
     ACADEMIC: READING_PATTERNS,
 }

@@ -7,6 +7,7 @@ guardarse."""
 
 from fluent.toefl.domain.catalog import (
     ACADEMIC,
+    B1,
     DAILY,
     DISCUSSION,
     EMAIL,
@@ -22,7 +23,7 @@ from fluent.toefl.domain.ports import ItemBank, ItemGenerator
 # Una llamada de unos 25 s por tanda. Ocho frases son una sesión corta; tres
 # párrafos son treinta huecos; tres enunciados de writing son media hora;
 # cuatro textos cotidianos y dos académicos son unas veinte preguntas.
-BATCH = {SENTENCE: 8, WORDS: 3, EMAIL: 3, DISCUSSION: 3, DAILY: 4, ACADEMIC: 2}
+BATCH = {SENTENCE: 8, WORDS: 3, EMAIL: 3, DISCUSSION: 3, B1: 3, DAILY: 4, ACADEMIC: 2}
 
 
 class RefillBank:

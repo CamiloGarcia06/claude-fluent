@@ -71,6 +71,19 @@ advice comes from the last 10 attempts of each pattern (question type, rubric
 criterion), and the next exercise starts with the weakest one. Listening and
 speaking are not built: they need TTS/STT dependencies.
 
+On top of the TOEFL screen, **Camino a B1** measures the master's requirement (B1)
+on what I write. Every writing submission also gets a CEFR level (A1-C1) from
+the grader, and a B1 checklist found by rules, without the model (varied
+connectors, contrast, reasons, present perfect, conditional, relative clause).
+The path is a window, not a history: how many of my last 10 first attempts are
+B1 or above, with 8 of 10 as the target. The mission for the next text is the
+two checklist items missing most in the last 5. The weekly routine: Monday and
+Friday a new Texto B1, Tuesday rewrite the weakest text of the week (untimed),
+Wednesday nothing (PLN class), Thursday an Academic Discussion, weekend free.
+The **Texto B1** tab is not TOEFL: Cambridge B1 Preliminary style tasks (email
+with notes, article, story; 100 words, 20 min), because that is what the
+Javeriana placement looks like.
+
 Not built: rename/archive on Mazos and the exercise mode.
 (Update this section after each phase.)
 

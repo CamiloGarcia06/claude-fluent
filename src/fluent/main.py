@@ -48,6 +48,7 @@ from fluent.syllabi.infrastructure.api.deps import SyllabusUseCases
 from fluent.syllabi.infrastructure.api.router import router as syllabi_router
 from fluent.syllabi.infrastructure.disk_store import DiskSyllabusStore
 from fluent.syllabi.infrastructure.llm_model import LlmSyllabusModel
+from fluent.toefl.application.get_b1_path import GetB1Path
 from fluent.toefl.application.get_overview import GetOverview
 from fluent.toefl.application.grade_attempt import GradeAttempt
 from fluent.toefl.application.grade_reading import GradeReading
@@ -138,6 +139,7 @@ def build_app() -> FastAPI:
     )
     toefl = ToeflUseCases(
         overview=GetOverview(toefl_bank, toefl_log, toefl_submissions),
+        path=GetB1Path(toefl_bank, toefl_submissions, clock),
         next_item=NextItem(toefl_bank, toefl_log),
         grade=GradeAttempt(toefl_bank, toefl_log, clock),
         refill=RefillBank(toefl_bank, LlmGenerator(generate)),

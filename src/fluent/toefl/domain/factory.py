@@ -2,10 +2,14 @@
 tiene la forma esperada lanza ValueError, TypeError o AttributeError, y quien
 llama lo cuenta como rechazado."""
 
-from fluent.toefl.domain.catalog import DISCUSSION, EMAIL, READING_KINDS, SENTENCE, WORDS
+from fluent.toefl.domain.catalog import B1, DISCUSSION, EMAIL, READING_KINDS, SENTENCE, WORDS
 from fluent.toefl.domain.entities import build_sentence_item, build_words_item
 from fluent.toefl.domain.reading import build_reading_item
-from fluent.toefl.domain.writing import build_discussion_prompt, build_email_prompt
+from fluent.toefl.domain.writing import (
+    build_b1_prompt,
+    build_discussion_prompt,
+    build_email_prompt,
+)
 
 BUILD_ERRORS = (ValueError, TypeError, AttributeError)
 
@@ -27,6 +31,8 @@ def build_item(kind: str, raw: dict):
         )
     if kind == DISCUSSION:
         return build_discussion_prompt(raw.get("course"), raw.get("professor"), raw.get("posts"))
+    if kind == B1:
+        return build_b1_prompt(raw.get("genre"), raw.get("title"), raw.get("task"), raw.get("notes"))
     if kind in READING_KINDS:
         return build_reading_item(
             kind, raw.get("genre"), raw.get("title"), raw.get("text"), raw.get("questions")

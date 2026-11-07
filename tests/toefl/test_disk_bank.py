@@ -48,6 +48,11 @@ def test_writing_prompts_and_submissions_round_trip(tmp_path):
     assert bank.items("email") == [email_prompt()]
     assert bank.items("discussion") == [discussion_prompt()]
 
+    from .fakes import b1_email, b1_story
+
+    assert bank.add("b1", [b1_email(), b1_story()]) == 2
+    assert bank.items("b1") == [b1_email(), b1_story()]
+
     subs = DiskSubmissions(tmp_path)
     for i in range(MAX_SUBMISSIONS + 3):
         subs.append({"kind": "email" if i % 2 else "discussion", "score": i})

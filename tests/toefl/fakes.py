@@ -8,7 +8,11 @@ from fluent.toefl.domain.entities import (
     build_words_item,
 )
 from fluent.toefl.domain.reading import ReadingItem, build_reading_item
-from fluent.toefl.domain.writing import build_discussion_prompt, build_email_prompt
+from fluent.toefl.domain.writing import (
+    build_b1_prompt,
+    build_discussion_prompt,
+    build_email_prompt,
+)
 
 # El párrafo del Practice Test 1 de ETS: sus diez huecos son la respuesta oficial.
 ETS_PARAGRAPH = (
@@ -47,7 +51,14 @@ class FakeBank:
     """Un banco en memoria por tipo. `sentences=` y `words=` son atajos."""
 
     def __init__(
-        self, sentences=None, words=None, emails=None, discussions=None, daily=None, academic=None
+        self,
+        sentences=None,
+        words=None,
+        emails=None,
+        discussions=None,
+        daily=None,
+        academic=None,
+        b1=None,
     ) -> None:
         self.stored: dict[str, list] = {
             "sentence": list(sentences or []),
@@ -56,6 +67,7 @@ class FakeBank:
             "discussion": list(discussions or []),
             "daily": list(daily or []),
             "academic": list(academic or []),
+            "b1": list(b1 or []),
         }
 
     def items(self, kind):
@@ -141,6 +153,26 @@ def discussion_prompt():
             {"name": "Claire", "text": "Yes, it builds civic responsibility."},
             {"name": "Andrew", "text": "No, students already have limited free time."},
         ],
+    )
+
+
+def b1_email():
+    return build_b1_prompt(
+        "email",
+        "Our English club trip",
+        "Hi! The club is planning a trip next month. We can go to the beach or the "
+        "mountains. Which do you prefer? Can you help organise it? Write soon, Ana",
+        ["Great idea!", "Say which one and why", "Yes, explain how", "Suggest a day"],
+    )
+
+
+def b1_story():
+    return build_b1_prompt(
+        "story",
+        "A story",
+        'Your story must begin with this sentence: "When I opened the door, I could not '
+        'believe my eyes."',
+        [],
     )
 
 

@@ -1,6 +1,8 @@
-// TOEFL · writing — Write an Email (7 min) y Write for an Academic Discussion
-// (10 min, 100 palabras), con el reloj del examen y la corrección de Claude con
-// la rúbrica de ETS.
+// TOEFL · writing — Write an Email (7 min), Write for an Academic Discussion
+// (10 min, 100 palabras) y el Texto B1 estilo Cambridge (20 min, 100 palabras),
+// con reloj y la corrección de Claude: la nota de la rúbrica y el nivel del
+// marco europeo, que es lo que mide el requisito (B1). Debajo, la lista B1:
+// qué rasgos de B1 usaste, buscados con reglas, sin modelo.
 //
 // El enunciado no se ve hasta apretar Empezar: en el examen el reloj arranca
 // con él, y leerlo antes regala minutos que el día del examen no vas a tener.
@@ -37,6 +39,39 @@ function briefEmail(item) {
   return box;
 }
 
+const GENRE = { email: "Correo", article: "Artículo", story: "Historia" };
+
+function briefB1(item) {
+  const box = el("div", "toefl-brief");
+  box.append(el("p", "toefl-label", `${GENRE[item.genre] ?? item.genre} · ${item.title}`));
+  box.append(el("p", "", item.task));
+  if (item.notes.length) {
+    const list = el("ul", "toefl-bullets");
+    for (const note of item.notes) list.append(el("li", "", note));
+    box.append(el("p", "toefl-label", "Tu respuesta tiene que cubrir estas notas:"), list);
+  }
+  box.append(el("p", "toefl-label", "Escribí unas 100 palabras."));
+  return box;
+}
+
+const TITLES = { email: "Write an Email", discussion: "Academic Discussion" };
+const titleOf = (item) =>
+  item.kind === "b1" ? `Texto B1 · ${GENRE[item.genre] ?? item.genre}` : TITLES[item.kind];
+
+const brief = (item) =>
+  item.kind === "email" ? briefEmail(item)
+    : item.kind === "b1" ? briefB1(item) : briefDiscussion(item);
+
+/** La misión del camino a B1, a la vista mientras escribís. */
+function missionNote(mission) {
+  if (!mission?.length) return null;
+  const labels = mission.map((m) => m.label.toLowerCase()).join(" y ");
+  return el("p", "b1-mission-note", `Misión: meté ${labels}. ${mission[0].example}`);
+}
+
+const LEVELS = ["A1", "A2", "B1", "B2", "C1"];
+const atLeastB1 = (level) => LEVELS.indexOf(level) >= LEVELS.indexOf("B1");
+
 function briefDiscussion(item) {
   const box = el("div", "toefl-brief");
   box.append(el("p", "toefl-label", `Profesor · ${item.course}`), el("p", "", item.professor));
@@ -53,13 +88,15 @@ function briefDiscussion(item) {
 /** Monta el enunciado con su botón de Empezar. `ctx`: { kind, done } — `done`
  *  vuelve a leer la cabecera cuando la entrega ya cuenta. */
 export function paint(item, ctx) {
-  $("toefl-title").textContent = item.kind === "email" ? "Write an Email" : "Academic Discussion";
+  $("toefl-title").textContent = titleOf(item);
   $("toefl-meta").textContent = `${item.minutes} min`;
   const body = $("toefl-body");
   body.replaceChildren(el("p", "panel-note",
     `Tenés ${item.minutes} minutos desde que aparece el enunciado` +
     (item.min_words ? `, y un mínimo de ${item.min_words} palabras.` : ".") +
     " Al terminar el tiempo se entrega solo."));
+  const note = missionNote(ctx.mission);
+  if (note) body.append(note);
   $("toefl-result").replaceChildren();
 
   const start = el("button", "", `Empezar (${item.minutes}:00)`);
@@ -68,9 +105,19 @@ export function paint(item, ctx) {
   $("toefl-actions").replaceChildren(start);
 }
 
+/** La reescritura del martes: el texto de ese día, sin reloj, con la lista B1
+ *  de la primera versión a la vista. */
+export function rewrite(item, text, ctx) {
+  $("toefl-title").textContent = `${titleOf(item)} · reescritura`;
+  $("toefl-result").replaceChildren();
+  compose(item, ctx, { timed: false, text, firstText: text });
+}
+
 function compose(item, ctx, { timed, text, firstText }) {
   const body = $("toefl-body");
-  body.replaceChildren(item.kind === "email" ? briefEmail(item) : briefDiscussion(item));
+  body.replaceChildren(brief(item));
+  const note = missionNote(ctx.mission);
+  if (note) body.append(note);
 
   const box = el("textarea", "termbox toefl-text");
   box.rows = item.kind === "email" ? 10 : 12;
@@ -154,14 +201,25 @@ function feedback(item, ctx, out, firstText) {
   const result = $("toefl-result");
   result.replaceChildren();
 
-  const verdict = el("p", out.score >= 4 ? "toefl-verdict" : "toefl-verdict toefl-wrong",
-    `${out.score} / ${out.max_score}`);
+  const verdict = el("p", atLeastB1(out.level) ? "toefl-verdict" : "toefl-verdict toefl-wrong",
+    `${out.level} · ${out.score} / ${out.max_score}`);
   result.append(verdict);
   if (out.revision && out.first_score !== null) {
-    result.append(el("p", "toefl-count", `Primera versión: ${out.first_score} / ${out.max_score}`));
+    result.append(el("p", "toefl-count",
+      `Primera versión: ${out.first_level ?? "?"} · ${out.first_score} / ${out.max_score}`));
   }
+  const rubric = item.kind === "b1" ? "Cambridge B1" : "ETS";
   result.append(el("p", "toefl-count",
-    `${out.words} palabras · estimación de Claude con la rúbrica de ETS, no es una nota oficial`));
+    `${out.words} palabras · estimación de Claude (nivel del marco europeo y rúbrica de ` +
+    `${rubric}), no es una nota oficial`));
+
+  const checks = el("ul", "b1-checks");
+  for (const c of out.checks) {
+    const li = el("li", "", `${c.ok ? "✓" : "✗"} ${c.label}`);
+    li.dataset.ok = String(c.ok);
+    checks.append(li);
+  }
+  result.append(el("h3", "toefl-subhead", "Lista B1"), checks);
   if (out.summary) result.append(el("p", "panel-note", out.summary));
 
   const criteria = el("ul", "rows toefl-criteria");
@@ -186,7 +244,7 @@ function feedback(item, ctx, out, firstText) {
   }
 
   if (out.improved) {
-    result.append(el("h3", "toefl-subhead", "Tu texto, en nivel 5"));
+    result.append(el("h3", "toefl-subhead", "Tu texto, un nivel más arriba"));
     result.append(el("p", "toefl-improved", out.improved));
   }
   for (const tip of out.tips) result.append(tipCard(tip));

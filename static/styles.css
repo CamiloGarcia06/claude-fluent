@@ -2153,3 +2153,54 @@ h2 .rail-chip { margin-left: var(--s2); }
 .toefl-q .toefl-why .tag { margin-right: var(--s1); }
 .toefl-q[data-correct="false"] .toefl-why .tag { color: var(--kraft); }
 .toefl-slow { color: var(--kraft); }
+
+/* ── TOEFL · camino a B1 ─────────────────────────────────────────── */
+
+.b1-today { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); }
+.b1-today p { margin: 0; color: var(--ink-2); }
+
+.b1-week {
+  list-style: none; margin: var(--s4) 0 0; padding: 0;
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--s2);
+}
+.b1-week li {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: var(--s2) 0; border: 1px solid var(--rule-faint); border-radius: 6px;
+  color: var(--ink-3); font-size: 13px;
+}
+.b1-week li[data-today="true"] { border-color: var(--present); color: var(--ink); }
+.b1-week li[data-done="true"] { background: var(--present-dim); color: var(--present); }
+.b1-week li[data-done="false"]:not([data-today="true"]) { color: var(--kraft); }
+.b1-week li[data-task="rest"], .b1-week li[data-task="free"] { color: var(--ink-4); }
+.b1-day { text-transform: capitalize; }
+.b1-mark { font-family: var(--mono); font-size: 12px; }
+
+.b1-road { margin-top: var(--s4); }
+.b1-road-head { margin: 0; color: var(--ink-2); }
+.b1-dots {
+  list-style: none; margin: var(--s2) 0 0; padding: 0;
+  display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: var(--s1);
+}
+.b1-dots li {
+  height: 26px; display: grid; place-items: center; border-radius: 4px;
+  font-family: var(--mono); font-size: 11px; border: 1px dashed var(--rule);
+  color: var(--ink-4);
+}
+.b1-dots li[data-state="ok"] { border: 0; background: var(--present); color: var(--present-ink); }
+.b1-dots li[data-state="short"] { border: 0; background: var(--kraft-dim); color: var(--kraft); }
+
+.b1-mission { margin-top: var(--s4); }
+.b1-mission-note {
+  margin: var(--s3) 0 0; padding: var(--s2) var(--s3); border-left: 3px solid var(--present);
+  background: var(--present-dim); color: var(--ink-2); font-size: 14px;
+}
+
+.b1-checks {
+  list-style: none; margin: var(--s2) 0 0; padding: 0;
+  display: flex; flex-wrap: wrap; gap: var(--s2);
+}
+.b1-checks li {
+  padding: 2px var(--s2); border-radius: 4px; font-size: 13px;
+  background: var(--kraft-dim); color: var(--kraft);
+}
+.b1-checks li[data-ok="true"] { background: var(--present-dim); color: var(--present); }

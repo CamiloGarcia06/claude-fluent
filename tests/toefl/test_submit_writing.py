@@ -40,6 +40,20 @@ def test_submit_grades_logs_one_attempt_per_criterion_and_keeps_the_text():
     failed = {a.pattern for a in log.attempts if not a.correct}
     assert failed == {"grammar", "mechanics"}
     assert subs.rows[0]["text"] == TEXT and subs.rows[0]["seconds"] == 300
+    assert out["level"] == "A2" and subs.rows[0]["level"] == "A2"
+    assert {c["key"] for c in out["checks"]} >= {"connectors", "present_perfect"}
+
+
+def test_submit_grades_a_b1_text():
+    from .fakes import b1_email
+
+    bank = FakeBank(b1=[b1_email()])
+    subs = FakeSubmissions()
+    submit = SubmitWriting(bank, FakeGrader(raw(level="B1")), FakeLog(), subs, FixedClock())
+    out = submit("b1", b1_email().id, "If I could, I would go to the beach.")
+    assert out["level"] == "B1"
+    assert next(c for c in out["checks"] if c["key"] == "conditional")["ok"]
+    assert subs.rows[0]["kind"] == "b1"
 
 
 def test_revision_is_graded_but_does_not_count_for_advice():
@@ -48,7 +62,7 @@ def test_revision_is_graded_but_does_not_count_for_advice():
     submit("email", prompt.id, TEXT)
     before = len(log.attempts)
     out = submit("email", prompt.id, TEXT.replace("Is very", "It is very"), revision=True)
-    assert out["revision"] and out["first_score"] == 3
+    assert out["revision"] and out["first_score"] == 3 and out["first_level"] == "A2"
     assert len(log.attempts) == before
     assert subs.rows[-1]["revision"] is True
 

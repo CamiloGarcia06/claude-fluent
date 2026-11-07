@@ -14,6 +14,7 @@ from collections.abc import Callable
 from fluent.shared.errors import Upstream
 from fluent.toefl.domain.catalog import (
     ACADEMIC,
+    B1,
     DAILY,
     DISCUSSION,
     EMAIL,
@@ -221,6 +222,51 @@ Rules:
   psychology, urban planning, media. Different in each prompt.
 """
 
+B1_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "prompts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "genre": {"type": "string", "enum": ["email", "article", "story"]},
+                    "title": {"type": "string"},
+                    "task": {"type": "string"},
+                    "notes": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["genre", "title", "task", "notes"],
+            },
+        }
+    },
+    "required": ["prompts"],
+}
+
+B1_PROMPT = """\
+Write {count} writing tasks in the style of Cambridge B1 Preliminary (PET), Writing
+Part 1 and Part 2. The writer should produce about 100 words in 20 minutes.
+
+Use each genre at least once, in this order: email, article, story.
+
+- email (Part 1): "task" is a short email the writer received from a friend,
+  teacher or club (3-5 sentences, signed), and "notes" are exactly 3 or 4 short
+  handwritten-style notes on it that the reply must cover ("Yes, great idea!",
+  "Explain why", "Suggest a day", "Say which one").
+  "title" is the email subject.
+- article (Part 2): "title" is the article title from a magazine or website;
+  "task" is the announcement inviting readers to write (2-3 sentences ending
+  with the questions to answer, e.g. "What is your favourite…? Why?").
+  "notes" is an empty list.
+- story (Part 2): "title" is "A story"; "task" says "Your story must begin with
+  this sentence:" followed by the first sentence in quotes. "notes" is an
+  empty list.
+
+Rules:
+- Everyday topics a young adult in Colombia can write about: free time, travel,
+  food, technology, study, work, friends, sport, music, the city.
+- Simple B1 English in the task itself. Different topic in each task.
+"""
+
 READING_SCHEMA = {
     "type": "object",
     "properties": {
@@ -388,6 +434,8 @@ class LlmGenerator:
         if kind == DISCUSSION:
             prompt = DISCUSSION_PROMPT.format(count=count)
             return _rows(self._call(prompt, DISCUSSION_SCHEMA), "prompts")
+        if kind == B1:
+            return _rows(self._call(B1_PROMPT.format(count=count), B1_SCHEMA), "prompts")
         if kind in (DAILY, ACADEMIC):
             template = DAILY_PROMPT if kind == DAILY else ACADEMIC_PROMPT
             prompt = template.format(

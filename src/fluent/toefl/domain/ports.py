@@ -6,9 +6,9 @@ from typing import Protocol
 
 from fluent.toefl.domain.entities import Attempt, SentenceItem, WordsItem
 from fluent.toefl.domain.reading import ReadingItem
-from fluent.toefl.domain.writing import DiscussionPrompt, EmailPrompt
+from fluent.toefl.domain.writing import B1Prompt, DiscussionPrompt, EmailPrompt
 
-Item = SentenceItem | WordsItem | EmailPrompt | DiscussionPrompt | ReadingItem
+Item = SentenceItem | WordsItem | EmailPrompt | DiscussionPrompt | B1Prompt | ReadingItem
 
 
 class ItemBank(Protocol):

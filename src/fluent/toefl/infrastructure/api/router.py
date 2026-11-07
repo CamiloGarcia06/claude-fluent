@@ -13,6 +13,11 @@ def toefl_overview(uc: ToeflUseCases = Depends(get_toefl)) -> dict:
     return uc.overview()
 
 
+@router.get("/path")
+def toefl_path(uc: ToeflUseCases = Depends(get_toefl)) -> dict:
+    return uc.path()
+
+
 @router.get("/next/{kind}")
 def toefl_next(kind: str, uc: ToeflUseCases = Depends(get_toefl)) -> dict:
     return uc.next_item(kind)

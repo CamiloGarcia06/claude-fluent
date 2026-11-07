@@ -36,7 +36,12 @@ class GetOverview:
             }
             if kind in WRITING_KINDS:
                 out[kind]["recent"] = [
-                    {"at": s.get("at"), "score": s.get("score"), "words": s.get("words")}
+                    {
+                        "at": s.get("at"),
+                        "score": s.get("score"),
+                        "level": s.get("level"),
+                        "words": s.get("words"),
+                    }
                     for s in self._submissions.recent(kind)[-RECENT_SCORES:]
                 ]
             if kind in READING_KINDS:

@@ -11,8 +11,14 @@
 //
 // El consejo sale de los últimos diez intentos de cada patrón, no de una
 // historia: es lo que cambia cuando mejorás.
+//
+// Arriba de todo va el camino a B1 (toefl-path.js): el requisito de la maestría
+// es B1, así que la franja dice qué toca hoy, cuántos textos ya son B1 y qué
+// meter en el próximo. La pestaña Texto B1 no es del TOEFL: es un texto estilo
+// Cambridge B1 Preliminary, que es a lo que se parece la clasificación.
 
 import { $, el, getJSON, ApiError, emptyRow, row, waiting, working } from "/ui.js";
+import * as path from "/views/toefl-path.js";
 import * as reading from "/views/toefl-reading.js";
 import * as writing from "/views/toefl-writing.js";
 
@@ -26,6 +32,7 @@ const TABS = [
   { kind: "sentence", label: "Build a Sentence", batch: "8 frases", estimate: 27000 },
   { kind: "email", label: "Email", batch: "3 enunciados", estimate: 15000, writing: true },
   { kind: "discussion", label: "Academic Discussion", batch: "3 enunciados", estimate: 15000, writing: true },
+  { kind: "b1", label: "Texto B1", batch: "3 enunciados", estimate: 20000, writing: true },
 ];
 
 const MARKUP = `
@@ -36,6 +43,8 @@ const MARKUP = `
     <p class="hero-note" id="toefl-tip"></p>
     <div id="toefl-tabs" class="filters"></div>
   </section>
+
+  <section class="panel" id="toefl-path"></section>
 
   <section class="panel" id="toefl-exercise">
     <div class="panel-head">
@@ -60,6 +69,7 @@ const MARKUP = `
 let kind = "words";
 let overview = null;
 let current = null;
+let mission = [];
 
 const tab = () => TABS.find((t) => t.kind === kind);
 
@@ -87,8 +97,10 @@ function paintHeader() {
       .join(" · ");
     $("toefl-tip").textContent += ` Tus últimas lecturas: ${reads}.`;
   } else if (data.recent?.length) {
-    const scores = data.recent.map((r) => r.score).join(" · ");
-    $("toefl-tip").textContent += ` Tus últimas notas: ${scores} (de 5).`;
+    const scores = data.recent
+      .map((r) => (r.level ? `${r.level} (${r.score}/5)` : `${r.score}/5`))
+      .join(" · ");
+    $("toefl-tip").textContent += ` Tus últimas entregas: ${scores}.`;
   }
   $("toefl-window").textContent = tab().writing
     ? "últimas 10 entregas"
@@ -313,6 +325,30 @@ async function refreshHeader() {
   } catch (error) {
     if (!(error instanceof ApiError)) throw error;
   }
+  await paintPath();
+}
+
+// ── Camino a B1 ───────────────────────────────────────────────────────
+
+const writingContext = () => ({ next: load, done: refreshHeader, mission });
+
+async function paintPath() {
+  mission = await path.paint($("toefl-path"), {
+    go(target) {
+      if (target === kind) $("toefl-exercise").scrollIntoView({ behavior: "smooth" });
+      else location.hash = `#/toefl/${target}`;
+    },
+    rewrite(r) {
+      // La reescritura del martes abre el enunciado de ese texto aunque no sea
+      // el siguiente sin hacer. El hash cambia sin volver a pintar la vista.
+      kind = r.item.kind;
+      history.replaceState(null, "", `#/toefl/${kind}`);
+      paintHeader();
+      current = r.item;
+      writing.rewrite(current, r.text, writingContext());
+      $("toefl-exercise").scrollIntoView({ behavior: "smooth" });
+    },
+  });
 }
 
 async function load() {
@@ -326,7 +362,8 @@ async function load() {
   const out = await getJSON(`/api/toefl/next/${kind}`);
   current = out.item;
   if (tab().writing || tab().reading) {
-    (tab().writing ? writing : reading).paint(current, { next: load, done: refreshHeader });
+    if (tab().writing) writing.paint(current, writingContext());
+    else reading.paint(current, { next: load, done: refreshHeader });
     return;
   }
   $("toefl-meta").textContent = `quedan ${out.fresh} sin hacer`;
@@ -339,5 +376,6 @@ export async function render(root, params) {
   root.innerHTML = MARKUP;
   current = null;
   if (!overview) $("toefl-rows").append(emptyRow("Leyendo tus intentos…"));
+  await paintPath();
   await load();
 }

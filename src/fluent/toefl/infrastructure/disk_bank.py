@@ -12,11 +12,11 @@ from collections.abc import Callable
 from pathlib import Path
 
 from fluent.shared.config import DATA_DIR
-from fluent.toefl.domain.catalog import ACADEMIC, DAILY, DISCUSSION, EMAIL, SENTENCE, WORDS
+from fluent.toefl.domain.catalog import ACADEMIC, B1, DAILY, DISCUSSION, EMAIL, SENTENCE, WORDS
 from fluent.toefl.domain.entities import Attempt, Gap, SentenceItem, WordsItem
 from fluent.toefl.domain.ports import Item
 from fluent.toefl.domain.reading import Question, ReadingItem
-from fluent.toefl.domain.writing import DiscussionPrompt, EmailPrompt, Post
+from fluent.toefl.domain.writing import B1Prompt, DiscussionPrompt, EmailPrompt, Post
 
 TOEFL_DIR = DATA_DIR / "toefl"
 
@@ -25,9 +25,11 @@ TOEFL_DIR = DATA_DIR / "toefl"
 # que se cae del tope vuelve a contar como ejercicio sin hacer, y está bien:
 # es repaso.
 MAX_ATTEMPTS = 500
-# Las entregas de writing guardan el texto entero: cincuenta alcanzan para
-# releer lo último. Las de reading son un renglón; comparten el tope.
-MAX_SUBMISSIONS = 50
+# Las entregas de writing guardan el texto entero; las de reading son un
+# renglón, y comparten el tope. Ciento cincuenta dejan siempre los diez últimos
+# textos de primer intento del camino a B1 y la semana de la rutina, aunque
+# entre medio haya muchas lecturas.
+MAX_SUBMISSIONS = 150
 
 
 def _read(path: Path) -> list[dict]:
@@ -124,6 +126,26 @@ def _discussion_row(item: DiscussionPrompt) -> dict:
     }
 
 
+def _b1(row: dict) -> B1Prompt:
+    return B1Prompt(
+        id=row["id"],
+        genre=row["genre"],
+        title=row["title"],
+        task=row["task"],
+        notes=tuple(row["notes"]),
+    )
+
+
+def _b1_row(item: B1Prompt) -> dict:
+    return {
+        "id": item.id,
+        "genre": item.genre,
+        "title": item.title,
+        "task": item.task,
+        "notes": list(item.notes),
+    }
+
+
 def _reading(row: dict) -> ReadingItem:
     return ReadingItem(
         id=row["id"],
@@ -164,6 +186,7 @@ _FILES: dict[str, tuple[str, Callable[[dict], Item], Callable]] = {
     WORDS: ("words.json", _words, _words_row),
     EMAIL: ("emails.json", _email, _email_row),
     DISCUSSION: ("discussions.json", _discussion, _discussion_row),
+    B1: ("b1.json", _b1, _b1_row),
     DAILY: ("daily.json", _reading, _reading_row),
     ACADEMIC: ("academic.json", _reading, _reading_row),
 }

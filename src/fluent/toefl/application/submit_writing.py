@@ -12,6 +12,7 @@ escribís en el examen: se corrige igual, se guarda marcada, y devuelve la nota
 de la primera versión para comparar. Los consejos siguen midiendo primeros
 intentos, con reloj."""
 
+from fluent.toefl.domain.b1 import checklist
 from fluent.toefl.domain.catalog import WRITING_KINDS, WRITING_PATTERNS, tip_card
 from fluent.toefl.domain.entities import Attempt
 from fluent.toefl.domain.errors import BadFeedback, ItemNotFound, NoText, TextTooLong, UnknownKind
@@ -19,6 +20,7 @@ from fluent.toefl.domain.ports import AttemptLog, Clock, Grader, ItemBank, Submi
 from fluent.toefl.domain.writing import (
     MAX_SCORE,
     MAX_TEXT_CHARS,
+    B1Prompt,
     DiscussionPrompt,
     EmailPrompt,
     build_feedback,
@@ -49,7 +51,7 @@ class SubmitWriting:
         if len(text) > MAX_TEXT_CHARS:
             raise TextTooLong()
         prompt = next((i for i in self._bank.items(kind) if i.id == item_id), None)
-        if not isinstance(prompt, (EmailPrompt, DiscussionPrompt)):
+        if not isinstance(prompt, (EmailPrompt, DiscussionPrompt, B1Prompt)):
             raise ItemNotFound()
 
         raw = self._grader.grade(kind, prompt.brief(), text)
@@ -85,6 +87,7 @@ class SubmitWriting:
                 "seconds": elapsed,
                 "text": text,
                 "score": feedback.score,
+                "level": feedback.level,
                 "words": feedback.words,
                 "flagged": flagged,
                 "revision": revision,
@@ -93,6 +96,8 @@ class SubmitWriting:
         return {
             "score": feedback.score,
             "max_score": MAX_SCORE,
+            "level": feedback.level,
+            "checks": checklist(text),
             "words": feedback.words,
             "summary": feedback.summary,
             "criteria": [
@@ -106,5 +111,6 @@ class SubmitWriting:
             "improved": feedback.improved,
             "revision": revision,
             "first_score": first.get("score") if revision and first else None,
+            "first_level": first.get("level") if revision and first else None,
             "tips": [tip_card(key) for key in flagged],
         }
